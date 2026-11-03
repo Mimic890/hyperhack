@@ -76,6 +76,11 @@ func TestLoadErrors(t *testing.T) {
 			}
 		})
 	}
+	env := validEnv()
+	env["S3_ENDPOINT"] = "https://s3.example.com/blog"
+	if _, err := load(env); err == nil || !strings.Contains(err.Error(), "S3_ENDPOINT") {
+		t.Errorf("endpoint with path: err = %v", err)
+	}
 }
 
 func TestErrorsHideSecrets(t *testing.T) {
