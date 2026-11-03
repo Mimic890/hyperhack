@@ -84,14 +84,14 @@
 | `SITE_NAME`, `SITE_URL` | Название и публичный URL сайта. |
 | `DEFAULT_LANG` | Язык интерфейса и язык поста по умолчанию: `en` или `ru`. По умолчанию `en`. |
 | `GITHUB_URL` | Ссылка в верхнем баре. |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Доступ к бакету. |
-| `POLL_INTERVAL` | Интервал опроса бакета. |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Доступ к бакету. `S3_ENDPOINT` только `https://`. `S3_REGION` по умолчанию: `garage`. |
+| `POLL_INTERVAL` | Интервал опроса бакета. По умолчанию: `60s`, диапазон 10 с – 24 ч. |
 | `REINDEX_TOKEN` | Токен для `POST /reindex`. |
 | `ALTCHA_HMAC_KEY` | Секрет ALTCHA. |
-| `READING_WPM` | Слов в минуту для расчётного времени чтения. |
-| `LOG_LEVEL`, `LOG_FORMAT` | Уровень и формат логов (`json` / `text`). |
-| `DATA_DIR` | Папка для SQLite. |
-| `VAULT_DIR` | Папка для локального зеркала бакета. |
+| `READING_WPM` | Слов в минуту для расчётного времени чтения. По умолчанию: `200`. |
+| `LOG_LEVEL`, `LOG_FORMAT` | Уровень и формат логов (`json` / `text`). По умолчанию: `info`, `json`. |
+| `DATA_DIR` | Папка для SQLite. По умолчанию: `/data`. |
+| `VAULT_DIR` | Папка для локального зеркала бакета. По умолчанию: `/vault`. |
 | `RATE_LIMIT_VOTE`, `RATE_LIMIT_BEACON`, `RATE_LIMIT_REINDEX` | Лимиты на клиента для эндпоинтов записи. По умолчанию: `10/1m`, `30/1m`, `5/1m`. |
 | `POPULAR_DAYS`, `POPULAR_LIMIT` | Окно и размер «Популярных». По умолчанию: `30`, `5`. |
 | `PAGE_SIZE` | Постов на страницу в «Новых» и на страницах тегов. По умолчанию: `10`. |
@@ -100,7 +100,7 @@
 | `INDEXNOW_KEY` | Необязательно. Включает пинги IndexNow. |
 | `RATE_LIMIT_SEARCH` | Лимит поиска на клиента. По умолчанию: `30/1m`. |
 | `VISITOR_SECRET` | HMAC-ключ для суточного хеша посетителя, ≥ 32 байт. |
-| `ALTCHA_EXPIRES`, `ALTCHA_MAX_NUMBER` | Срок жизни и сложность задачи. Срок по умолчанию: `5m`. |
+| `ALTCHA_EXPIRES`, `ALTCHA_MAX_NUMBER` | Срок жизни и сложность задачи. По умолчанию: `5m`, `100000`. |
 | `METRICS_ALLOW`, `REINDEX_ALLOW` | CIDR, с которых можно вызывать `/metrics` и `/reindex`. По умолчанию: loopback и частные диапазоны. |
 | `MAX_POST_BYTES`, `MAX_ASSET_BYTES`, `MAX_OBJECTS` | Лимиты контента бакета. По умолчанию: 1 МиБ, 50 МиБ, 10 000. |
 | `TRUSTED_PROXIES` | IP/CIDR прокси, которым можно задавать `X-Forwarded-For`. Без этого IP клиента — адрес TCP-соединения. Нужно для правильных лимитов и хеша посетителя за Caddy. |
@@ -352,7 +352,7 @@ Garage не шлёт уведомления об изменениях в бак�
 - Библиотека: `log/slog` из стандартной библиотеки Go.
 - Уровни: `DEBUG`, `INFO`, `WARN`, `ERROR`. Задаётся `LOG_LEVEL`.
 - Формат: JSON в stdout (для Docker и Loki). Текстовый — для локальной разработки. Задаётся `LOG_FORMAT`.
-- Поля каждой записи: `time`, `level`, `msg`, `component` (`sync`, `http`, `render`, `votes`, `metrics`, `store`).
+- Поля каждой записи: `time`, `level`, `msg`, `component` (`main`, `sync`, `http`, `render`, `votes`, `metrics`, `store`). `main`: запуск, конфиг и остановка.
 - HTTP-записи: `request_id`, метод, путь, статус, длительность.
 - Ошибка при старте (конфиг, S3, SQLite) → лог `ERROR` и выход с кодом 1.
 
@@ -595,3 +595,4 @@ Garage не шлёт уведомления об изменениях в бак�
 - 2026-11-03 — Всё — один Go-бинарник. Внешнее: Garage, Caddy, VictoriaMetrics, Grafana (уже работают).
 - 2026-11-03 — Полный дизайн безопасности (смзопасность»). Голоса по анонимной cookie `vid`, не по IP. `/reindex` приватный, как `/metrics`. Тема в cookie, без inline JS. Картинки только из `assets/`.
 - 2026-11-03 — Go 1.27 (go1.27.3).
+- 2026-11-03 — Значения по умолчанию: `POLL_INTERVAL` 60s, `READING_WPM` 200, `LOG_LEVEL` info, `LOG_FORMAT` json, `DATA_DIR` /data, `VAULT_DIR` /vault, `ALTCHA_MAX_NUMBER` 100000, `S3_REGION` garage. Компонент логов `main`. Сервис слушает фиксированный порт 8080.

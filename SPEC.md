@@ -84,14 +84,14 @@ Proposed variables (final names set during implementation):
 | `SITE_NAME`, `SITE_URL` | Site name and public URL. |
 | `DEFAULT_LANG` | UI language and default post language: `en` or `ru`. Default `en`. |
 | `GITHUB_URL` | Link in the top bar. |
-| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Bucket access. |
-| `POLL_INTERVAL` | Bucket polling interval. |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Bucket access. `S3_ENDPOINT` must be `https://`. `S3_REGION` default: `garage`. |
+| `POLL_INTERVAL` | Bucket polling interval. Default: `60s`, range 10s–24h. |
 | `REINDEX_TOKEN` | Token for `POST /reindex`. |
 | `ALTCHA_HMAC_KEY` | ALTCHA secret. |
-| `READING_WPM` | Words per minute for estimated reading time. |
-| `LOG_LEVEL`, `LOG_FORMAT` | Log level and format (`json` / `text`). |
-| `DATA_DIR` | Directory for SQLite. |
-| `VAULT_DIR` | Directory for the local bucket mirror. |
+| `READING_WPM` | Words per minute for estimated reading time. Default: `200`. |
+| `LOG_LEVEL`, `LOG_FORMAT` | Log level and format (`json` / `text`). Defaults: `info`, `json`. |
+| `DATA_DIR` | Directory for SQLite. Default: `/data`. |
+| `VAULT_DIR` | Directory for the local bucket mirror. Default: `/vault`. |
 | `RATE_LIMIT_VOTE`, `RATE_LIMIT_BEACON`, `RATE_LIMIT_REINDEX` | Per-client limits on write endpoints. Defaults: `10/1m`, `30/1m`, `5/1m`. |
 | `POPULAR_DAYS`, `POPULAR_LIMIT` | "Popular" window and size. Defaults: `30`, `5`. |
 | `PAGE_SIZE` | Posts per page in "Newest" and tag pages. Default: `10`. |
@@ -100,7 +100,7 @@ Proposed variables (final names set during implementation):
 | `INDEXNOW_KEY` | Optional. Enables IndexNow pings. |
 | `RATE_LIMIT_SEARCH` | Search limit per client. Default: `30/1m`. |
 | `VISITOR_SECRET` | HMAC key for the daily visitor hash, ≥ 32 bytes. |
-| `ALTCHA_EXPIRES`, `ALTCHA_MAX_NUMBER` | Challenge lifetime and difficulty. Default expiry: `5m`. |
+| `ALTCHA_EXPIRES`, `ALTCHA_MAX_NUMBER` | Challenge lifetime and difficulty. Defaults: `5m`, `100000`. |
 | `METRICS_ALLOW`, `REINDEX_ALLOW` | CIDRs allowed to call `/metrics` and `/reindex`. Default: loopback and private ranges. |
 | `MAX_POST_BYTES`, `MAX_ASSET_BYTES`, `MAX_OBJECTS` | Bucket content limits. Defaults: 1 MiB, 50 MiB, 10 000. |
 | `TRUSTED_PROXIES` | Proxy IPs/CIDRs allowed to set `X-Forwarded-For`. Without it the client IP is the TCP peer. Needed for correct limits and visitor hashes behind Caddy. |
@@ -352,7 +352,7 @@ Rules:
 - Library: `log/slog` from the Go standard library.
 - Levels: `DEBUG`, `INFO`, `WARN`, `ERROR`. Set by `LOG_LEVEL`.
 - Format: JSON to stdout (for Docker and Loki). Text for local development. Set by `LOG_FORMAT`.
-- Fields in every record: `time`, `level`, `msg`, `component` (`sync`, `http`, `render`, `votes`, `metrics`, `store`).
+- Fields in every record: `time`, `level`, `msg`, `component` (`main`, `sync`, `http`, `render`, `votes`, `metrics`, `store`). `main`: startup, config and shutdown.
 - HTTP records: `request_id`, method, path, status, duration.
 - Startup error (config, S3, SQLite) → `ERROR` log and exit code 1.
 
@@ -596,3 +596,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-03 — Everything is one Go binary. External: Garage, Caddy, VictoriaMetrics, Grafana (already running).
 - 2026-11-03 — Full security design (see Security). Votes keyed by anonymous `vid` cookie, not IP. `/reindex` private like `/metrics`. Theme in a cookie, no inline JS. Images only from `assets/`.
 - 2026-11-03 — Go 1.27 (go1.27.3).
+- 2026-11-03 — Config defaults: `POLL_INTERVAL` 60s, `READING_WPM` 200, `LOG_LEVEL` info, `LOG_FORMAT` json, `DATA_DIR` /data, `VAULT_DIR` /vault, `ALTCHA_MAX_NUMBER` 100000, `S3_REGION` garage. Log component `main`. The service listens on fixed port 8080.
