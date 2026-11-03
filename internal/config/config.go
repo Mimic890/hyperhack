@@ -141,7 +141,7 @@ func (c *Config) Summary() []any {
 		"site_url", c.SiteURL.String(),
 		"default_lang", c.DefaultLang,
 		"s3_endpoint", c.S3Endpoint.String(),
-		"poll_interval", c.PollInterval,
+		"poll_interval", c.PollInterval.String(),
 		"log_level", c.LogLevel.String(),
 		"log_format", c.LogFormat,
 		"data_dir", c.DataDir,
