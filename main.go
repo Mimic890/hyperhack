@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/Mimic890/hyperhack/internal/config"
+	"github.com/Mimic890/hyperhack/internal/content"
+	"github.com/Mimic890/hyperhack/internal/mirror"
 	"github.com/Mimic890/hyperhack/internal/server"
+	"github.com/Mimic890/hyperhack/internal/syncer"
 )
 
 // addr is fixed: the container port is mapped in docker-compose.yml.
@@ -36,14 +39,28 @@ func run() int {
 	mainLog := log.With("component", "main")
 	mainLog.Info("starting", cfg.Summary()...)
 
-	var ready atomic.Bool
-	// shortcut: no content index yet, so ready at once; set it after the first sync once sync exists.
-	ready.Store(true)
+	mir, err := mirror.Open(cfg.VaultDir)
+	if err != nil {
+		mainLog.Error("open vault dir", "err", err)
+		return 1
+	}
+	bucket, err := syncer.NewS3(cfg.S3Endpoint, cfg.S3Region, cfg.S3Bucket, cfg.S3AccessKey, cfg.S3SecretKey)
+	if err != nil {
+		mainLog.Error("S3 client", "err", err)
+		return 1
+	}
+	syn := syncer.New(bucket, mir, content.NewRenderer(cfg.DefaultLang), syncer.Options{
+		PollInterval:  cfg.PollInterval,
+		MaxPostBytes:  cfg.MaxPostBytes,
+		MaxAssetBytes: cfg.MaxAssetBytes,
+		MaxObjects:    cfg.MaxObjects,
+	}, log)
 
+	var ready atomic.Bool
 	httpLog := log.With("component", "http")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(httpLog, &ready),
+		Handler:           server.New(httpLog, cfg, &ready, syn.Sync),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -57,14 +74,25 @@ func run() int {
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
 	mainLog.Info("listening", "addr", addr)
+	syncCtx, stopSync := context.WithCancel(ctx)
+	defer stopSync()
+	syncErr := make(chan error, 1)
+	go func() { syncErr <- syn.Run(syncCtx, &ready) }()
 
+	code := 0
 	select {
 	case err := <-errc:
 		mainLog.Error("server failed", "err", err)
 		return 1
+	case err := <-syncErr:
+		if err != nil {
+			mainLog.Error("no local mirror and S3 unavailable", "err", err)
+			code = 1
+		}
 	case <-ctx.Done():
 	}
 	mainLog.Info("shutting down")
+	stopSync()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -75,7 +103,7 @@ func run() int {
 		mainLog.Error("server failed", "err", err)
 		return 1
 	}
-	return 0
+	return code
 }
 
 func newLogger(cfg *config.Config) *slog.Logger {
