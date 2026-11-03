@@ -379,7 +379,7 @@ Garage не шлёт уведомления об изменениях в бак�
 | Контент бакета | Взломанное устройство автора пишет плохие файлы | Ключие, лимиты размеров, санитайзер, проверка путей |
 | Секреты | Утечка через репозиторий, логи, образ | Только `.env`, никогда не логируются, secret scanning |
 | Цепочка поставок | Вредная зависимость или action, подмена образа | Закреплённые actions, Dependabot, `govulncheck`, attestations |
-| Приватность читателей | СлежкÐ Без сырого IP, суточный HMAC-хеш, без сторонних запросов |
+| Приватность читателей | Слежка, утечки IP | Без сырого IP, суточный HMAC-хеш, без сторонних запросов |
 
 Границы доверия: интернет → Caddy → сервис; бакет → сервис (доверие частичное: пишет только автор, но его устройства могут взломать); CI → GHCR → хост.
 
@@ -391,7 +391,7 @@ Garage не шлёт уведомления об изменениях в бак�
   - Разрешённые расширения: `png jpg jpeg webp avif gif svg mp4 webm`. Остальное → `404`.
   - Заголовки: `X-Content-Type-Options: nosniff` и `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox`. SVG со скриптом не выполнится.
 - Лимит тела запроса для `/api/*`: 16 КБ.
-- `Strict-Transport-Security: max-age=31536000` (без `includeSubDomainsoad по умолчанию).
+- `Strict-Transport-Security: max-age=31536000` (без `includeSubDomains` и без preload по умолчанию).
 - Заголовок `Server` убран.
 - Без Cloudflare: его замедляют в России с июня 2025, а большинство читателей в России. Защиты от DDoS выше по сети нет: риск принят.
 - Отклонено: проверка при входе на сайт (например, Anubis). Она может блокировать поисковики и ботов превью ссылок.
@@ -403,7 +403,7 @@ Garage не шлёт уведомления об изменениях в бак�
 | Страницы, `/search`, `/tags/*`, `/rss.xml`, `/sitemap.xml`, `/robots.txt`, `/llms.txt`, `/posts/<slug>.md` | GET | публичный | `RATE_LIMIT_SEARCH` на `/search` |
 | `/api/altcha` | GET | публичный | `RATE_LIMIT_VOTE` |
 | `/api/vote` | POST | публичный | ALTCHA, cookie голоса, `RATE_LIMIT_VOTE`, проверка Origin |
-| `/api/beacon` | POST | публичный | `RACON`, проверка Origin, строгая схема |
+| `/api/beacon` | POST | публичный | `RATE_LIMIT_BEACON`, проверка Origin, строгая схема |
 | `/reindex` | POST | приватная сеть | блок в Caddy, `REINDEX_ALLOW`, `REINDEX_TOKEN` |
 | `/metrics` | GET | приватная сеть | блок в Caddy, `METRICS_ALLOW` |
 | `/healthz` | GET | публичный | постоянный ответ, без данных |
@@ -412,29 +412,29 @@ Garage не шлёт уведомления об изменениях в бак�
 
 ### Проверка входных данных
 
-- Размер тела: `htttesReader`, 4 КБ для `/api/*`.
+- Размер тела: `http.MaxBytesReader`, 4 КБ для `/api/*`.
 - JSON: обязателен `Content-Type: application/json`, `DisallowUnknownFields`, только один объект.
 - Slug должен быть в текущем индексе. Неизвестный slug → `404`, ничего не сохраняется. Это же ограничивает метки метрик.
 - Числа ограничены: время на странице 0–4 ч; глубина чтения только 0 / 25 / 50 / 75 / 100.
-- Ðечисления: голос (`like` / `dislike` / `none`), источник, устройство, тема, язык. Другие значения → `400`.
+- Только перечисления: голос (`like` / `dislike` / `none`), источник, устройство, тема, язык. Другие значения → `400`.
 - Поисковый запрос: максимум 200 символов, максимум 10 слов. Запрос строится в коде (match + fuzzy + prefix), никогда не из синтаксиса query-string Bleve: это закрывает DoS через regex и wildcard. Опечатки ≤ 2, префикс от 2 символов. Номер страницы ограничен.
 - Cookie `lang` и `theme`: проверка по перечислению; неверное значение → по умолчанию.
 
 ### Вывод и XSS
 
 - Весь HTML через `html/template` (экранирование по контексту). Шаблоны парсятся при старте.
-- Markdown: goldmark без `WithUnsafe`. По умолчанию goldmark не рендерит сырой HTML ные URL.
+- Markdown: goldmark без `WithUnsafe`. По умолчанию goldmark не рендерит сырой HTML и опасные URL.
 - Второй слой: HTML поста проходит `bluemonday` (политика UGC + классы chroma + id заголовков).
 - Внешние ссылки получают `rel="noopener noreferrer"`.
 - Картинки только из `assets/`. Внешние картинки блокирует CSP (заодно IP читателей не уходят наружу).
 - JSON-LD через `json.Marshal` (экранирует `<`, `>`, `&`).
-- RSS и sitemap через `encodig/xml`.
+- RSS и sitemap через `encoding/xml`.
 - `/posts/<slug>.md`: `Content-Type: text/markdown; charset=utf-8`, `nosniff`.
 - Страницы ошибок не показывают внутренние детали.
 
 ### Заголовки безопасности (ставит сервис)
 
-- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests`. worker-src` добавлять, только если этого требует сборка ALTCHA.
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests`. `blob:` в `worker-src` добавлять, только если этого требует сборка ALTCHA.
 - Нет inline-скриптов и inline-стилей. Тема и язык берутся из cookie и рендерятся на сервере, поэтому inline-скрипт против мигания темы не нужен.
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()`.
 - Все JS, CSS, шрифты и виджет ALTCHA лежат на своём сервере. Без CDN, без сторонних запросов.
@@ -444,7 +444,7 @@ Garage не шлёт уведомления об изменениях в бак�
 - Заголовков CORS нет.
 - `/api/*` требует `Content-Type: application/json` (форма с другого сайта не отправит его без preflight) и same-origin `Origin` / `Sec-Fetch-Site`.
 
-### Голоса и личнÐ
+### Голоса и личность посетителя
 
 - Личность для голоса: анонимная случайная cookie `vid` (128 бит, `HttpOnly; Secure; SameSite=Lax; Max-Age=1 год`). Личных данных в ней нет.
 - Один голос на `vid` на пост. Если удалить cookie, можно проголосовать снова, но каждый голос стоит решения ALTCHA и упирается в `RATE_LIMIT_VOTE`.
@@ -453,7 +453,7 @@ Garage не шлёт уведомления об изменениях в бак�
 
 ### ALTCHA
 
-- Библиотека: `github.com/altcha-ocha-lib-go`. Невидимый режим: браузер решает задачу при клике.
+- Библиотека: `github.com/altcha-org/altcha-lib-go`. Невидимый режим: браузер решает задачу при клике.
 - `ALTCHA_HMAC_KEY` ≥ 32 случайных байт.
 - Срок жизни задачи `ALTCHA_EXPIRES` (по умолчанию 5 мин). Истекла → отказ.
 - Защита от повтора в сервисе: использованные задачи хранятся в памяти до истечения; повтор → отказ. Библиотека этого не делает.
@@ -463,25 +463,25 @@ Garage не шлёт уведомления об изменениях в бак�
 
 - Ключ: IP клиента через `TRUSTED_PROXIES`; IPv6 группируется по `/64`.
 - Token bucket в памяти с жёстким потолком числа клиентов (старые вытесняются), поэтому поток IP не съест RAM.
-- Лимиты: `RATE_LIMIT_VOTE`, `RATE_LIMIT_BEACON`, `RATE_LIMIT_SEARCH`, `RATE_LIMIT_REINDEX`. Превышение → `Retry-After`, лог WARN.
+- Лимиты: `RATE_LIMIT_VOTE`, `RATE_LIMIT_BEACON`, `RATE_LIMIT_SEARCH`, `RATE_LIMIT_REINDEX`. Превышение → `429` + `Retry-After`, лог WARN.
 
 ### Приватные эндпоинты
 
 - `/metrics` и `/reindex`: закрыты в Caddy и принимаются только с CIDR из `METRICS_ALLOW` / `REINDEX_ALLOW` (по умолчанию: loopback и частные диапазоны). Два независимых слоя.
 - `REINDEX_TOKEN` ≥ 32 байт, передаётся как `Authorization: Bearer`, сравнивается через `crypto/subtle.ConstantTimeCompare`.
-- Одновременно Ðт только одна переиндексация. Лишние вызовы ждут текущую.
+- Одновременно идёт только одна переиндексация. Лишние вызовы ждут текущую.
 
 ### Бакет и локальное зеркало
 
 - У сервиса свой ключ Garage только с правом **read**. Remotely Save использует отдельный ключ с read + write.
 - S3 по HTTPS с проверкой сертификата.
-- Лимиты размеров: `MAX_POST_BYTES` (по умолчанию 1 МиБ), `MAX_ASSET_BYTES` (50 МиБ), `MAX_OBCTS` (10 000). Превышение → пропуск + WARN.
+- Лимиты размеров: `MAX_POST_BYTES` (по умолчанию 1 МиБ), `MAX_ASSET_BYTES` (50 МиБ), `MAX_OBJECTS` (10 000). Превышение → пропуск + WARN.
 - Запись в зеркало через `os.Root` (Go ≥ 1.24): выйти через `..` или symlink нельзя. Ключи с абсолютным путём, `\`, NUL или управляющими символами отклоняются.
 - Ассеты: тот же список расширений, что в Caddy.
 - Атомарная запись (временный файл + rename), поэтому Caddy не отдаст недописанный файл.
 - Права: папки `0755`, файлы `0644` (Caddy нужно чтение). Файл SQLite `0600`.
 - Размер frontmatter проверяется до парсинга YAML. `cover` должен указывать внутрь `assets/`.
-- Slug: `^[a-z0-9-]{1,100}$`. Имя файла с другими символами (например, кириллицей) транслитерируется. Если результат пустой и `slug` нет â¿уск + WARN.
+- Slug: `^[a-z0-9-]{1,100}$`. Имя файла с другими символами (например, кириллицей) транслитерируется. Если результат пустой и `slug` нет → пропуск + WARN.
 
 ### HTTP-сервер
 
@@ -500,7 +500,7 @@ Garage не шлёт уведомления об изменениях в бак�
 ### Контейнер
 
 - Статический бинарник (`CGO_ENABLED=0`, `-trimpath`), драйвер SQLite на чистом Go (например, `modernc.org/sqlite`).
-- Образ: distroless static non-root или `scratch`.ез shell и пакетного менеджера.
+- Образ: distroless static non-root или `scratch`. Без shell и пакетного менеджера.
 - Пример Compose:
   ```yaml
   services:
@@ -519,7 +519,7 @@ Garage не шлёт уведомления об изменениях в бак�
       mem_limit: 256m
       pids_limit: 128
       logging:
-        options: { max-size: "10m" "3" }
+        options: { max-size: "10m", max-file: "3" }
       healthcheck:
         test: ["CMD", "/hyperhack", "healthcheck"]
       restart: unless-stopped
@@ -530,13 +530,14 @@ Garage не шлёт уведомления об изменениях в бак�
 
 - Только в `.env`. В `.env.example` — заглушки.
 - Проверка при старте: обязательные секреты есть и достаточно длинные, иначе выход с кодом 1.
-- Никогда не логируются, не попадают в сообщения об ошибках и README описывает ротацию: `REINDEX_TOKEN`, `ALTCHA_HMAC_KEY`, `VISITOR_SECRET`, ключи S3.
+- Никогда не логируются, не попадают в сообщения об ошибках и в образ.
+- README описывает ротацию: `REINDEX_TOKEN`, `ALTCHA_HMAC_KEY`, `VISITOR_SECRET`, ключи S3.
 
 ### Цепочка поставок и CI
 
 - GitHub Actions закреплены по полному SHA коммита.
 - Минимальные `permissions:` на job: по умолчанию `contents: read`; `packages: write`, `id-token: write`, `attestations: write` — только в release job.
-- Без `pull_request_target` с checkout кода PR. PR из форков не получÐµтов.
+- Без `pull_request_target` с checkout кода PR. PR из форков не получают секретов.
 - Dependabot: `gomod`, `github-actions`, `docker`.
 - Проверки в CI: `go vet`, `staticcheck`, `govulncheck`, тесты с `-race`, CodeQL (Go).
 - Релиз: сборка образа, push в GHCR, attestation через `actions/attest` (`push-to-registry: true`). Проверка на хосте: `gh attestation verify oci://ghcr.io/<owner>/hyperhack:<version> -R <owner>/hyperhack`.
@@ -571,15 +572,15 @@ Garage не шлёт уведомления об изменениях в бак�
 ## Журнал решений
 
 - 2026-11-03 — Один автор, без регистрации.
-- 2026-11-03 — Только S3 (Garage); Webшен.
+- 2026-11-03 — Только S3 (Garage); WebDAV убран.
 - 2026-11-03 — Синхронизация: опрос `ListObjectsV2` + `POST /reindex` с токеном.
 - 2026-11-03 — Общей аналитики в сервисе нет. Только метрики постов.
 - 2026-11-03 — Анонимные лайки и дизлайки с проверкой на бота.
-- 2026-11-03 — Безопасность: rate limit Caddy + CrowdSec, лимиты записи в сервисе, ALTCHA на голос. Без защиты от DDoS выÑµз проверки при входе.
+- 2026-11-03 — Безопасность: rate limit Caddy + CrowdSec, лимиты записи в сервисе, ALTCHA на голос. Без защиты от DDoS выше по цепочке. Без проверки при входе.
 - 2026-11-03 — Frontend: `html/template`, без фреймворка. Светлая и тёмная темы.
 - 2026-11-03 — Верхний бар: лого + название слева, центр пуст, тема + RSS + GitHub справа. RSS в MVP.
 - 2026-11-03 — Просмотры считает клиентский скрипт.
-- 2026-11-03 — Расчётное время чтения публично. Измеренное время на стÑтолько метрика. `/metrics` для VictoriaMetrics + дашборд Grafana.
+- 2026-11-03 — Расчётное время чтения публично. Измеренное время на странице — только метрика. `/metrics` для VictoriaMetrics + дашборд Grafana.
 - 2026-11-03 — `/metrics` на основном порту, закрыт в reverse proxy.
 - 2026-11-03 — Логи: `log/slog`, DEBUG / INFO / WARN / ERROR, JSON в stdout.
 - 2026-11-03 — Формат поста: свойства Obsidian `title`, `description`, `date`, `updated`, `tags`, `cover`, `slug`, `lang`, `draft`. Ассеты в `assets/`.
@@ -589,10 +590,10 @@ Garage не шлёт уведомления об изменениях в бак�
 - 2026-11-03 — Docker + Compose. Настройки и секреты в `.env`.
 - 2026-11-03 — Open source на GitHub, AGPL-3.0, GitHub Actions. Всё на английском, русская копия доков русский интерфейс через `DEFAULT_LANG`.
 - 2026-11-03 — `DATA_DIR`, домен (`SITE_URL`) и лимиты в `.env`. `Caddyfile.example` с `example.com`. Переключатель языка для читателя рядом с темой. Перенос из Ghost вне объёма.
-- 2026-11-03 — Посты: любой `.md` на любой глубине, кроме `assets/`, `.` и `_`; URL `/posts/<slug>`. Сервис зеркалит бакет в `./vault`; Caddy оÑиз него `/assets/*`. Без Redis.
+- 2026-11-03 — Посты: любой `.md` на любой глубине, кроме `assets/`, `.` и `_`; URL `/posts/<slug>`. Сервис зеркалит бакет в `./vault`; Caddy отдаёт из него `/assets/*`. Без Redis.
 - 2026-11-03 — Подсветка кода на сервере (chroma). Поиск Bleve (ru/en, опечатки, префикс, веса полей). «Популярные» за `POPULAR_DAYS`. Пагинация. Страницы тегов с цветами из хеша. RSS с полным текстом. Полный набор SEO. `/healthz`. Лимиты и размеры в `.env`.
-- 2026-11-03 — Дополнительные скрытые метÑ¸: просмотры по дням, глубина чтения, источник трафика, клики по внешним ссылкам, копирования кода, класс устройства, язык и тема, голоса по дням, статистика поиска.
+- 2026-11-03 — Дополнительные скрытые метрики: просмотры по дням, глубина чтения, источник трафика, клики по внешним ссылкам, копирования кода, класс устройства, язык и тема, голоса по дням, статистика поиска.
 - 2026-11-03 — Всё — один Go-бинарник. Внешнее: Garage, Caddy, VictoriaMetrics, Grafana (уже работают).
-- 2026-11-03 — Полный дизайн безопасности (смзопасность»). Голоса по анонимной cookie `vid`, не по IP. `/reindex` приватный, как `/metrics`. Тема в cookie, без inline JS. Картинки только из `assets/`.
+- 2026-11-03 — Полный дизайн безопасности (см. «Безопасность»). Голоса по анонимной cookie `vid`, не по IP. `/reindex` приватный, как `/metrics`. Тема в cookie, без inline JS. Картинки только из `assets/`.
 - 2026-11-03 — Go 1.27 (go1.27.3).
 - 2026-11-03 — Значения по умолчанию: `POLL_INTERVAL` 60s, `READING_WPM` 200, `LOG_LEVEL` info, `LOG_FORMAT` json, `DATA_DIR` /data, `VAULT_DIR` /vault, `ALTCHA_MAX_NUMBER` 100000, `S3_REGION` garage. Компонент логов `main`. Сервис слушает фиксированный порт 8080.
