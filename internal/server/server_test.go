@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+
+	"github.com/Mimic890/hyperhack/internal/config"
 )
 
 func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
@@ -17,7 +19,7 @@ func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
 
 func TestRoutes(t *testing.T) {
 	var ready atomic.Bool
-	h := New(slog.New(slog.DiscardHandler), &ready)
+	h := New(slog.New(slog.DiscardHandler), &config.Config{}, &ready, nil)
 
 	if got := do(h, "GET", "/healthz").Code; got != http.StatusServiceUnavailable {
 		t.Errorf("healthz before ready = %d, want 503", got)

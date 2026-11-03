@@ -129,6 +129,9 @@ func Load(getenv func(string) string) (*Config, error) {
 		MaxAssetBytes: int64(l.int("MAX_ASSET_BYTES", 50<<20, 1024, 1<<30)),
 		MaxObjects:    l.int("MAX_OBJECTS", 10000, 1, 1_000_000),
 	}
+	if c.S3Endpoint != nil && c.S3Endpoint.Path != "" {
+		l.fail("S3_ENDPOINT", "must not have a path")
+	}
 	if err := errors.Join(l.errs...); err != nil {
 		return nil, err
 	}

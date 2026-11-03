@@ -45,7 +45,7 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 | Themes | Light and dark, toggle in the top bar. System theme by default until the visitor picks one. The choice is stored in a cookie and rendered on the server (no inline JS). |
 | Design | Beautiful, minimal, responsive. Designed during implementation. |
 | Languages | Code, docs, UI: English. UI also in Russian. Default: `DEFAULT_LANG` (`en` / `ru`) in `.env`. Visitor switch in the top bar; the choice is stored in a cookie (the server must know it to render the page). Post text is not translated. |
-| Storage | Garage (S3 API), path-style addressing. |
+| Storage | Garage (S3 API), path-style addressing. Client: `github.com/minio/minio-go/v7`. |
 | Post format | One `.md` = one post. Metadata: Obsidian properties (YAML frontmatter). |
 | Metrics | Prometheus text format on `/metrics`, scraped by VictoriaMetrics, Grafana dashboard. |
 | Logs | `log/slog`, levels DEBUG / INFO / WARN / ERROR. |
@@ -118,7 +118,7 @@ Proposed variables (final names set during implementation):
 ## Bucket layout
 
 - `assets/` — all assets: covers, images in posts. Decided.
-- Proposed: the service ignores keys where any path segment starts with `.` or `_` (same rule as Remotely Save).
+- The service ignores keys where any path segment starts with `.` or `_` (same rule as Remotely Save).
 
 ### Posts
 
@@ -131,6 +131,7 @@ Proposed variables (final names set during implementation):
 ### Local vault mirror and assets
 
 - During sync the service mirrors the bucket to `VAULT_DIR` on disk: downloads new and changed objects, deletes removed ones. The bucket stays the source of truth.
+- Mirror state (object key → `ETag`) is in `VAULT_DIR/.hyperhack.json`, mode `0600`, so a restart does not download everything again. Deleting `vault/` forces a full resync.
 - Compose layout (bind mounts only, no Docker volumes):
   ```
   hyperhack/
@@ -143,6 +144,7 @@ Proposed variables (final names set during implementation):
 - Caddy serves only `/assets/*`. `.md` files and other vault paths are not exposed.
 - The Caddy user needs read access to `vault/assets/`.
 - Pages and images keep working when S3 is down; only new changes wait for the next successful sync.
+- S3 down at startup: the index is built from the mirror and the service is ready. With no mirror yet, the first sync must succeed, else exit 1.
 
 Rejected: Redis. One instance, few posts: in-memory index, Go maps for rate limits, SQLite for counters, disk + OS page cache for files are enough.
 
@@ -184,6 +186,8 @@ Rules:
 
 - `date` and `updated`: Obsidian "date" (`2026-11-03`) or "date & time" (`2026-11-03T20:59`). The parser accepts both.
 - No `title` or `date`, or invalid YAML → post skipped, WARN log.
+- Invalid `date`, `updated`, `slug`, `lang` (not two lower-case letters), `cover` (not an allowed file in `assets/`) or `draft` → post skipped, WARN log.
+- Slug from the file name: lower case, Russian letters transliterated (`ж` → `zh`, `х` → `kh`, `щ` → `shch`, `ъ` and `ь` dropped), any other character run → `-`. Heading anchors use the same rule.
 - Two posts with one `slug` → the first by object key wins, the second is skipped, ERROR log.
 - Unknown fields are ignored. Obsidian can add its own.
 - README describes every field in this table.
@@ -192,7 +196,7 @@ Rules:
 
 - The blog has its own Obsidian vault. Personal notes never reach the blog bucket.
 - Obsidian syncs files to Garage with the Remotely Save plugin.
-- Vault layout = bucket layout (plus the Remotely Save prefix, if set).
+- Vault layout = bucket layout. The Remotely Save remote prefix stays empty: the blog has its own bucket.
 - Remotely Save encryption is off for this bucket. Otherwise the service cannot read the files.
 - Remotely Save does not sync files and folders whose name starts with `.` or `_`.
 - Remotely Save does not call `/reindex`. A new post appears after the next poll.
@@ -225,6 +229,10 @@ The service finds changes in two ways:
    Called over the private network (blocked on the public domain), so a post appears at once.
 
 Polling is the fallback. The endpoint is the fast path.
+
+- S3 errors: up to 3 attempts per poll (retry after 5 s, then 30 s), WARN per failed attempt, ERROR after the last.
+- A failed download keeps the old copy; the next poll retries it.
+- `POST /reindex` waits for the sync: `204` done, `401` bad token, `403` address not in `REINDEX_ALLOW`, `503` sync failed.
 
 ## Post metrics
 
@@ -354,7 +362,7 @@ Rules:
 - Format: JSON to stdout (for Docker and Loki). Text for local development. Set by `LOG_FORMAT`.
 - Fields in every record: `time`, `level`, `msg`, `component` (`main`, `sync`, `http`, `render`, `votes`, `metrics`, `store`). `main`: startup, config and shutdown.
 - HTTP records: `request_id`, method, path, status, duration.
-- Startup error (config, S3, SQLite) → `ERROR` log and exit code 1.
+- Startup error (config, SQLite; S3 only when there is no local mirror yet) → `ERROR` log and exit code 1.
 
 | Level | What is logged |
 |---|---|
@@ -423,7 +431,7 @@ Other methods → `405`. Unknown paths → `404`.
 ### Output and XSS
 
 - All HTML through `html/template` (context-aware escaping). Templates parsed at startup.
-- Markdown: goldmark without `WithUnsafe`. By default goldmark does not render raw HTML or dangerous URLs.
+- Markdown: goldmark with GFM (tables, strikethrough, autolinks), without `WithUnsafe`. By default goldmark does not render raw HTML or dangerous URLs.
 - Defense in depth: post HTML passes `bluemonday` (UGC policy + chroma classes + heading ids).
 - External links get `rel="noopener noreferrer"`.
 - Images only from `assets/`. External images are blocked by CSP (also keeps reader IPs private).
@@ -475,7 +483,7 @@ Other methods → `405`. Unknown paths → `404`.
 
 - The service has its own Garage key with **read** permission only. Remotely Save uses a separate key with read + write.
 - S3 over HTTPS with certificate verification.
-- Size limits: `MAX_POST_BYTES` (default 1 MiB), `MAX_ASSET_BYTES` (50 MiB), `MAX_OBJECTS` (10 000). Over limit → skip + WARN.
+- Size limits: `MAX_POST_BYTES` (default 1 MiB), `MAX_ASSET_BYTES` (50 MiB), `MAX_OBJECTS` (10 000). Over limit → skip + WARN. `MAX_OBJECTS` counts every key in the bucket, ignored ones too.
 - Mirror writes go through `os.Root` (Go ≥ 1.24): no escape via `..` or symlinks. Keys with an absolute path, `\`, NUL or control characters are rejected.
 - Assets: same extension allowlist as Caddy.
 - Atomic writes (temp file + rename), so Caddy never serves a partial file.
@@ -597,3 +605,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-03 — Full security design (see Security). Votes keyed by anonymous `vid` cookie, not IP. `/reindex` private like `/metrics`. Theme in a cookie, no inline JS. Images only from `assets/`.
 - 2026-11-03 — Go 1.27 (go1.27.3).
 - 2026-11-03 — Config defaults: `POLL_INTERVAL` 60s, `READING_WPM` 200, `LOG_LEVEL` info, `LOG_FORMAT` json, `DATA_DIR` /data, `VAULT_DIR` /vault, `ALTCHA_MAX_NUMBER` 100000, `S3_REGION` garage. Log component `main`. The service listens on fixed port 8080.
+- 2026-11-03 — Sync: S3 client `minio-go/v7`, frontmatter via `go.yaml.in/yaml/v3`, GFM. Mirror state in `VAULT_DIR/.hyperhack.json`. S3 down at startup: serve from the mirror; exit 1 only with no mirror. No Remotely Save prefix. Keys with a `.` or `_` segment are ignored (was proposed). `MAX_OBJECTS` counts all keys. An invalid frontmatter field skips the post. 3 S3 attempts per poll. `/reindex` waits for the sync and returns `204`.

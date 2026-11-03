@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
@@ -9,11 +10,14 @@ import (
 	"runtime/debug"
 	"sync/atomic"
 	"time"
+
+	"github.com/Mimic890/hyperhack/internal/config"
 )
 
-// New returns the root handler. ready gates /healthz.
-func New(log *slog.Logger, ready *atomic.Bool) http.Handler {
+// New returns the root handler. ready gates /healthz; sync runs a bucket sync for /reindex.
+func New(log *slog.Logger, cfg *config.Config, ready *atomic.Bool, sync func(context.Context) error) http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("POST /reindex", reindex(log, cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies, sync))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if !ready.Load() {
