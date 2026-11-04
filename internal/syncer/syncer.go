@@ -46,6 +46,26 @@ type Syncer struct {
 	warned    map[string]string // key → ETag already warned about, so polls do not repeat WARNs
 	maxWarned bool
 	index     atomic.Pointer[content.Index]
+
+	lastAttempt, lastSuccess atomic.Int64 // unix seconds
+	errors, fetchFailures    atomic.Int64
+	objects                  atomic.Int64
+}
+
+// Stats is the sync status for /metrics.
+type Stats struct {
+	LastAttempt, LastSuccess int64 // unix seconds, 0 if never
+	Errors                   int64 // failed syncs (listing or saving state)
+	FetchFailures            int64 // objects that failed to download
+	Objects                  int64 // keys in the last listing
+}
+
+// Stats returns the sync status counters.
+func (s *Syncer) Stats() Stats {
+	return Stats{
+		LastAttempt: s.lastAttempt.Load(), LastSuccess: s.lastSuccess.Load(),
+		Errors: s.errors.Load(), FetchFailures: s.fetchFailures.Load(), Objects: s.objects.Load(),
+	}
 }
 
 type cached struct {
@@ -123,11 +143,22 @@ func (s *Syncer) syncRetry(ctx context.Context) error {
 func (s *Syncer) Sync(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.lastAttempt.Store(time.Now().Unix())
+	err := s.sync(ctx)
+	if err != nil && ctx.Err() == nil {
+		s.errors.Add(1)
+	} else if err == nil {
+		s.lastSuccess.Store(time.Now().Unix())
+	}
+	return err
+}
 
+func (s *Syncer) sync(ctx context.Context) error {
 	objs, truncated, err := s.bucket.List(ctx, s.opts.MaxObjects)
 	if err != nil {
 		return fmt.Errorf("list: %w", err)
 	}
+	s.objects.Store(int64(len(objs)))
 	if truncated && !s.maxWarned {
 		s.log.Warn("bucket has more objects than MAX_OBJECTS, the rest are skipped", "max", s.opts.MaxObjects)
 	}
@@ -170,6 +201,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 		_, existed := s.mirror.State()[o.Key]
 		if err := s.fetch(ctx, o, limit); err != nil {
 			warn(o, "fetch failed, keeping the old copy", "err", err)
+			s.fetchFailures.Add(1)
 			failed++
 			continue
 		}

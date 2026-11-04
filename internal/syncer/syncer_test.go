@@ -343,3 +343,20 @@ func TestAssetChangeRerenders(t *testing.T) {
 func pngEncode(w io.Writer, width, height int) error {
 	return png.Encode(w, image.NewGray(image.Rect(0, 0, width, height)))
 }
+
+func TestStats(t *testing.T) {
+	b := &fakeBucket{objs: map[string]fakeObj{"a.md": {"e", post("A", "a")}, "b.md": {"e", post("B", "b")}}, getErr: map[string]error{"b.md": errors.New("boom")}}
+	s := newSyncer(t, t.TempDir(), b)
+	if err := s.Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	st := s.Stats()
+	if st.Objects != 2 || st.FetchFailures != 1 || st.Errors != 0 || st.LastSuccess == 0 || st.LastAttempt < st.LastSuccess {
+		t.Errorf("stats = %+v", st)
+	}
+	b.listErr = errors.New("down")
+	_ = s.Sync(context.Background())
+	if st := s.Stats(); st.Errors != 1 {
+		t.Errorf("errors = %d", st.Errors)
+	}
+}

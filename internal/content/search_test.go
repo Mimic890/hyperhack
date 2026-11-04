@@ -138,3 +138,10 @@ func TestPlainText(t *testing.T) {
 		t.Errorf("plainText = %q, want %q", got, want)
 	}
 }
+
+func TestOutboundHosts(t *testing.T) {
+	got := outboundHosts(`<a href="https://GitHub.com/x">a</a> <a href="/local">b</a> <a href="#h">c</a> <a href="http://github.com/y">d</a> <a href="mailto:a@b.c">e</a> <a href="https://t.me:443/z">f</a>`)
+	if strings.Join(got, ",") != "github.com,t.me" {
+		t.Errorf("outboundHosts = %v", got)
+	}
+}

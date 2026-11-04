@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net/url"
 	"path"
 	"regexp"
 	"slices"
@@ -36,6 +37,7 @@ type Post struct {
 	HTML        template.HTML // sanitized
 	Text        string        // plain text of HTML, for search
 	Source      []byte        // the raw .md file, served at /posts/<slug>.md
+	Outbound    []string      // hosts of external links: the only allowed outbound-click labels
 }
 
 const maxFrontmatter = 64 << 10
@@ -142,6 +144,7 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 		return nil, fmt.Errorf("render: %w", err)
 	}
 	p.Text = plainText(string(p.HTML))
+	p.Outbound = outboundHosts(string(p.HTML))
 	p.Source = src
 	return p, nil
 }
@@ -165,6 +168,39 @@ func cleanTags(in []string) ([]string, error) {
 		return nil, fmt.Errorf("more than %d tags", maxTags)
 	}
 	return out, nil
+}
+
+// maxOutbound bounds the outbound-click labels per post.
+const maxOutbound = 100
+
+// outboundHosts lists the lower-case hosts of http(s) links in s, unique, in order.
+func outboundHosts(s string) []string {
+	var hosts []string
+	z := html.NewTokenizer(strings.NewReader(s))
+	for len(hosts) < maxOutbound {
+		switch z.Next() {
+		case html.ErrorToken:
+			return hosts
+		case html.StartTagToken:
+			if name, attr := z.TagName(); string(name) != "a" || !attr {
+				continue
+			}
+			for {
+				k, v, more := z.TagAttr()
+				if string(k) == "href" {
+					if u, err := url.Parse(string(v)); err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != "" {
+						if h := strings.ToLower(u.Hostname()); !slices.Contains(hosts, h) {
+							hosts = append(hosts, h)
+						}
+					}
+				}
+				if !more {
+					break
+				}
+			}
+		}
+	}
+	return hosts
 }
 
 // plainText returns the text nodes of s, separated by spaces.
