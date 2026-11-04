@@ -91,7 +91,7 @@ Proposed variables (final names set during implementation):
 | `ALTCHA_HMAC_KEY` | ALTCHA secret. |
 | `READING_WPM` | Words per minute for estimated reading time. Default: `200`. |
 | `LOG_LEVEL`, `LOG_FORMAT` | Log level and format (`json` / `text`). Defaults: `info`, `json`. |
-| `DATA_DIR` | Directory for SQLite. Default: `/data`. |
+| `DATA_DIR` | Directory for SQLite (`hyperhack.db`). Default: `/data`. |
 | `VAULT_DIR` | Directory for the local bucket mirror. Default: `/vault`. |
 | `RATE_LIMIT_VOTE`, `RATE_LIMIT_BEACON`, `RATE_LIMIT_REINDEX` | Per-client limits on write endpoints. Defaults: `10/1m`, `30/1m`, `5/1m`. |
 | `POPULAR_DAYS`, `POPULAR_LIMIT` | "Popular" window and size. Defaults: `30`, `5`. |
@@ -248,14 +248,14 @@ The service stores per-post metrics only. Storage: SQLite.
 - Clients without JS (most bots) are not counted. Readers with JS off are not counted either. Accepted.
 - Public: shown on the post.
 - Feeds the "Popular" list.
-- Repeat views from one visitor are not counted (proposed: hash of IP + User-Agent per day; raw IP is not stored).
+- Repeat views from one visitor are not counted: daily visitor hash (see Security → Votes and visitor identity); raw IP is not stored.
 
 ### Time on page
 
 - The server cannot measure it alone. It needs the client script.
-- The script sends active reading time when the page is hidden or closed (`visibilitychange` + `navigator.sendBeacon`).
+- The script sends active reading time when the page is hidden or closed (`visibilitychange` / `pagehide`, `fetch` with `keepalive`).
 - Only time with the tab visible counts.
-- Stored per post as an aggregate (e.g. average or median).
+- Every delta carries a random per-page-view id. The server sums the deltas of a view and clamps the sum to 4 h, then adds it to the post aggregate: average time = total seconds / views with reading time.
 - Private. Not shown on the site. Metric only (see Monitoring).
 
 ### Estimated reading time
@@ -337,7 +337,7 @@ All private: metrics only, not shown on the site. Collected by the same client s
 |---|---|---|
 | Views per day per post | script | Trends; base for "Popular". |
 | Read depth: share of readers who reach 25 / 50 / 75 / 100 % of the text | script (`IntersectionObserver` on markers) | Do readers finish the post? |
-| Traffic source per post: `telegram`, `google`, `yandex`, `bing`, `github`, `direct`, `other` | script (`document.referrer` domain, mapped to a fixed list) | Where readers come from. |
+| Traffic source per post: `telegram`, `google`, `yandex`, `bing`, `github`, `direct`, `internal` (from this site), `other` | script (`document.referrer` domain, mapped to a fixed list) | Where readers come from. |
 | Outbound link clicks per post (target domain) | script | Which links readers use. |
 | Code copies per post | script (`copy` event inside code blocks) | Which code is useful. |
 | Device class: `mobile` / `tablet` / `desktop` | script (viewport width bucket) | Layout priorities. |
@@ -349,7 +349,7 @@ Rules:
 
 - Prometheus labels must have bounded values: post slug, fixed source list, fixed device list. Never raw URLs, referrers or queries as labels.
 - Search queries are stored in SQLite (normalized, lower case). `/metrics` exposes only the top `N` as a gauge, refreshed periodically.
-- One beacon request per page view carries all script metrics, sent on `visibilitychange` / `pagehide`. It is rate-limited by `RATE_LIMIT_BEACON`.
+- The script sends one beacon request per hide (`visibilitychange` / `pagehide`) with what changed since its last send, tagged with the page-view id. The view is counted once. Rate-limited by `RATE_LIMIT_BEACON`.
 
 ## Monitoring
 
@@ -452,7 +452,7 @@ Other methods → `405`. Unknown paths → `404`.
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests`. Add `blob:` to `worker-src` only if the ALTCHA build needs it.
 - No inline scripts or styles. Theme and language come from cookies and are rendered on the server, so no inline script is needed against a theme flash.
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()`.
-- All JS, CSS, fonts and the ALTCHA widget are self-hosted. No CDN, no third-party requests.
+- All JS, CSS, fonts and the ALTCHA solver are self-hosted. No CDN, no third-party requests.
 
 ### CSRF and CORS
 
@@ -464,11 +464,11 @@ Other methods → `405`. Unknown paths → `404`.
 - Vote identity: anonymous random cookie `vid` (128 bit, `HttpOnly; Secure; SameSite=Lax; Max-Age=1 year`). No personal data in it.
 - One vote per `vid` per post. Clearing the cookie allows a new vote, but each vote costs an ALTCHA solution and hits `RATE_LIMIT_VOTE`.
 - Why not an IP hash: many readers share one IP (mobile CGNAT), and a daily hash would allow one vote per day.
-- View dedup: `HMAC-SHA256(daily_key, ip_prefix + user_agent)`, `daily_key = HMAC(VISITOR_SECRET, date)`. Old daily keys are not stored, so days cannot be linked. Raw IPs are never stored or logged.
+- View dedup: `HMAC-SHA256(daily_key, ip_prefix + user_agent)`, `daily_key = HMAC(VISITOR_SECRET, date)`. `ip_prefix`: the IPv4 address or the IPv6 `/64`. Today's hashes live in memory only; old daily keys are not stored, so days cannot be linked. Raw IPs are never stored or logged.
 
 ### ALTCHA
 
-- Library: `github.com/altcha-org/altcha-lib-go`. Invisible mode: the browser solves the challenge on click.
+- Library: `github.com/altcha-org/altcha-lib-go/v2` (v2 challenges). Invisible: the post script solves the challenge on click with its own small solver (`static/altcha.js`), no widget.
 - `ALTCHA_HMAC_KEY` ≥ 32 random bytes.
 - Challenge expiry `ALTCHA_EXPIRES` (default 5 min). Expired → reject.
 - Replay protection in the service: used challenges stay in memory until expiry; reuse → reject. The library does not track this.
@@ -514,7 +514,7 @@ Other methods → `405`. Unknown paths → `404`.
 
 ### Container
 
-- Static binary (`CGO_ENABLED=0`, `-trimpath`), pure-Go SQLite driver (e.g. `modernc.org/sqlite`).
+- Static binary (`CGO_ENABLED=0`, `-trimpath`), pure-Go SQLite driver `modernc.org/sqlite`.
 - Runtime image: distroless static non-root, or `scratch`. No shell, no package manager.
 - Compose example:
   ```yaml
@@ -615,3 +615,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-03 — Sync: S3 client `minio-go/v7`, frontmatter via `go.yaml.in/yaml/v3`, GFM. Mirror state in `VAULT_DIR/.hyperhack.json`. S3 down at startup: serve from the mirror; exit 1 only with no mirror. No Remotely Save prefix. Keys with a `.` or `_` segment are ignored (was proposed). `MAX_OBJECTS` counts all keys. An invalid frontmatter field skips the post. 3 S3 attempts per poll. `/reindex` waits for the sync and returns `204`.
 - 2026-11-04 — Pages: theme and language switch via a no-JS form `POST /prefs`; cookies `theme` / `lang` (`HttpOnly; SameSite=Lax; Max-Age=1 year`, `Secure` on https). Logo from `assets/logo.svg`, built-in mark otherwise. Fonts Inter + JetBrains Mono, self-hosted. Pagination `/?page=N`: page 1 is `/`, other out-of-range values → `404`. `<html lang>` from the post; the top bar keeps the UI language. CSS and fonts at `/static/*`.
 - 2026-11-04 — Search, tags, RSS, SEO: Bleve `v2.6.1`, in-memory index, one document mapping per language (`en`, `ru`). Fuzziness by word length: ≤ 3 letters 0, ≤ 6 letters 1, longer 2; prefix on the last word. Snippets keep only `<mark>`. Search works without JS; `search.js` swaps the results while typing (debounced). Results page `noindex`. Tags lower case, Obsidian characters, `/tags/<tag>` paginated like the main page. 24 tag hue buckets (FNV-1a hash), contrast checked in tests. RSS: `dc:creator` from `AUTHOR_NAME`, `atom:updated` from `updated`. Image `width`/`height` read from the mirror (`golang.org/x/image` for WebP); an asset change re-renders all posts. IndexNow: one ping per sync with new, changed and removed post URLs, not on the first index load. New `AUTHOR_NAME`; `DEFAULT_OG_IMAGE` is a path inside `assets/`.
+- 2026-11-04 — Metrics, votes, limits: SQLite `DATA_DIR/hyperhack.db` (`modernc.org/sqlite` `v1.61.0`, `0600`, WAL). All-time counters per post and label (Grafana gets daily trends with `increase()`), daily views only for "Popular" (pruned after `POPULAR_DAYS`). Search queries: live requests from `search.js` (`X-Search: live`) are not stored, the settled query is; TTL 90 days, at most 10 000 rows, top 20 in `/metrics`, refreshed every 5 min. ALTCHA: `altcha-lib-go/v2` `v2.4.1`, v2 challenge with SHA-256, cost 1, `uint32` counter up to `ALTCHA_MAX_NUMBER`, key signature; own small solver `static/altcha.js` instead of the widget; signing keys derived from `ALTCHA_HMAC_KEY`; replay map capped at 100 000. Beacon: a delta on every hide and `pagehide`, sent with `fetch(…, {keepalive: true})` (JSON body), each with a random per-page-view id; the server sums time per view and clamps the sum to 4 h; time on page = average over views with reading time. Views and read depth: once per visitor per post per day; daily hashes in memory only (cap 200 000), `ip_prefix` = IPv4 address or IPv6 `/64`. Source `internal` for referrers from the site itself. Outbound hosts limited to links in the post. `/api/altcha` and `/api/vote` share `RATE_LIMIT_VOTE`; limiter tracks at most 10 000 clients. Vote cookie stored as SHA-256. "Popular" after "Newest" on page 1. `/metrics` in Prometheus text format written with the standard library.
