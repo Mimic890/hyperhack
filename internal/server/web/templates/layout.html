@@ -5,7 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="{{with .Theme}}{{.}}{{else}}light dark{{end}}">
 <title>{{block "title" .}}{{.Site.Name}}{{end}}</title>
+{{- with .Desc}}
+<meta name="description" content="{{.}}">
+{{- end}}
+{{- if .NoIndex}}
+<meta name="robots" content="noindex">
+{{- end}}
+{{- with .Canonical}}
+<link rel="canonical" href="{{.}}">
+{{- end}}
+<link rel="alternate" type="application/rss+xml" title="{{.Site.Name}}" href="/rss.xml">
+<meta property="og:type" content="{{.OGType}}">
+<meta property="og:site_name" content="{{.Site.Name}}">
+<meta property="og:title" content="{{with .Post}}{{.Title}}{{else}}{{template "title" .}}{{end}}">
+{{- with .Desc}}
+<meta property="og:description" content="{{.}}">
+{{- end}}
+{{- with .Canonical}}
+<meta property="og:url" content="{{.}}">
+{{- end}}
+{{- with .Image}}
+<meta property="og:image" content="{{.}}">
+<meta name="twitter:card" content="summary_large_image">
+{{- else}}
+<meta name="twitter:card" content="summary">
+{{- end}}
+{{- with .JSONLD}}
+<script type="application/ld+json">{{.}}</script>
+{{- end}}
 <link rel="stylesheet" href="{{.CSS}}">
+{{- with .JS}}
+<script src="{{.}}" defer></script>
+{{- end}}
 </head>
 <body>
 <a class="skip" href="#main" lang="{{.Lang}}">{{t "skip"}}</a>
@@ -37,3 +68,24 @@
 </body>
 </html>
 {{define "date"}}<time datetime="{{.Format "2006-01-02"}}">{{date .}}</time>{{end}}
+{{define "tags"}}{{with .}}<ul class="tags">{{range .}}<li><a class="tag {{tagClass .}}" href="{{tagPath .}}">#{{.}}</a></li>{{end}}</ul>{{end}}{{end}}
+{{define "card"}}<article class="card">
+    <h2><a href="/posts/{{.Slug}}">{{.Title}}</a></h2>
+    <p class="meta">{{template "date" .Date}} · {{t "min_read" "n" (minutes .Words)}}</p>
+    {{- with .Description}}<p class="desc">{{.}}</p>{{end}}
+    {{- template "tags" .Tags}}
+  </article>{{end}}
+{{define "pager"}}{{if gt .Pages 1}}
+<nav class="pager" aria-label="{{t "pages"}}">
+  {{- if gt .Page 1}}<a rel="prev" href="{{pageURL .PageBase (add .Page -1)}}">← {{if .Query}}{{t "prev"}}{{else}}{{t "newer"}}{{end}}</a>{{else}}<span></span>{{end}}
+  <span class="meta">{{t "page_of" "n" .Page "m" .Pages}}</span>
+  {{- if lt .Page .Pages}}<a rel="next" href="{{pageURL .PageBase (add .Page 1)}}">{{if .Query}}{{t "next"}}{{else}}{{t "older"}}{{end}} →</a>{{else}}<span></span>{{end}}
+</nav>
+{{- end}}{{end}}
+{{define "searchform"}}<form id="search" class="search" role="search" action="/search" method="get">
+  <input type="search" name="q" value="{{.Query}}" maxlength="200" placeholder="{{t "search_placeholder"}}" aria-label="{{t "search"}}">
+  {{- with .Tags}}
+  <select name="tag" aria-label="{{t "tag_filter"}}"><option value="">{{t "all_tags"}}</option>{{range .}}<option value="{{.}}"{{if eq . $.Tag}} selected{{end}}>#{{.}}</option>{{end}}</select>
+  {{- end}}
+  <button type="submit">{{t "search"}}</button>
+</form>{{end}}

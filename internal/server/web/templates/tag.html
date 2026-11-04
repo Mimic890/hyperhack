@@ -1,0 +1,10 @@
+{{define "title"}}#{{.Tag}} — {{.Site.Name}}{{if gt .Page 1}} — {{t "page_of" "n" .Page "m" .Pages}}{{end}}{{end}}
+{{define "main"}}
+<section aria-labelledby="tag-title">
+  <h1 id="tag-title" class="section-title">#{{.Tag}}</h1>
+  {{- range .Posts}}
+  {{template "card" .}}
+  {{- end}}
+</section>
+{{- template "pager" .}}
+{{end}}

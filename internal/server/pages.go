@@ -50,10 +50,25 @@ type pageData struct {
 	CSS     string
 	Site    site
 
+	JS string // search.js URL; empty on pages without the script
+
+	// <head> metadata. Desc, Canonical and Image are absolute or empty.
+	Desc, Canonical, Image string
+	OGType                 string // "website" or "article"
+	NoIndex                bool
+	JSONLD                 template.JS // from json.Marshal
+
 	Posts       []*content.Post
 	Page, Pages int
+	PageBase    string // pager URL for page 1; other pages add ?page=N
 
 	Post *content.Post
+
+	Tag   string   // tag page, or the search filter
+	Tags  []string // all tags, for the search filter
+	Query string
+	Hits  []content.Hit
+	Total int
 
 	Title, Text string // i18n keys for the error page
 }
@@ -65,6 +80,8 @@ type pages struct {
 	tmpl  map[string]map[string]*template.Template // lang → page → template
 	css   []byte
 	cssV  string
+	js    []byte
+	jsV   string
 	fonts fs.FS
 }
 
@@ -85,7 +102,7 @@ func newPages(log *slog.Logger, cfg *config.Config, index func() *content.Index)
 	p := &pages{log: log, cfg: cfg, index: index, tmpl: map[string]map[string]*template.Template{}}
 	for _, l := range langs {
 		p.tmpl[l] = map[string]*template.Template{}
-		for _, name := range []string{"home", "post", "error"} {
+		for _, name := range []string{"home", "post", "error", "search", "tag"} {
 			t := template.Must(template.New("").Funcs(funcs(msgs[l], cfg.ReadingWPM)).
 				ParseFS(webFS, "web/templates/layout.html", "web/templates/"+name+".html"))
 			p.tmpl[l][name] = t
@@ -96,14 +113,23 @@ func newPages(log *slog.Logger, cfg *config.Config, index func() *content.Index)
 	if err != nil {
 		panic(err)
 	}
-	p.css = append(base, themedChromaCSS()...)
-	sum := sha256.Sum256(p.css)
-	p.cssV = "/static/style.css?v=" + hex.EncodeToString(sum[:6])
+	p.css = append(append(base, tagCSS()...), themedChromaCSS()...)
+	p.cssV = versioned("/static/style.css", p.css)
+	if p.js, err = webFS.ReadFile("web/static/search.js"); err != nil {
+		panic(err)
+	}
+	p.jsV = versioned("/static/search.js", p.js)
 	p.fonts, err = fs.Sub(webFS, "web/static/fonts")
 	if err != nil {
 		panic(err)
 	}
 	return p
+}
+
+// versioned adds a content hash, so the file can be cached forever.
+func versioned(path string, b []byte) string {
+	sum := sha256.Sum256(b)
+	return path + "?v=" + hex.EncodeToString(sum[:6])
 }
 
 func funcs(msgs map[string]string, wpm int) template.FuncMap {
@@ -122,9 +148,12 @@ func funcs(msgs map[string]string, wpm int) template.FuncMap {
 		"date": func(d time.Time) string {
 			return t("date", "day", d.Day(), "month", t("month_"+strconv.Itoa(int(d.Month()))), "year", d.Year())
 		},
-		"minutes": func(words int) int { return max(1, (words+wpm-1)/wpm) },
-		"asset":   func(key string) string { return (&url.URL{Path: "/" + key}).EscapedPath() },
-		"add":     func(a, b int) int { return a + b },
+		"minutes":  func(words int) int { return max(1, (words+wpm-1)/wpm) },
+		"asset":    assetPath,
+		"add":      func(a, b int) int { return a + b },
+		"tagClass": tagClass,
+		"tagPath":  tagPath,
+		"pageURL":  pageURL,
 	}
 }
 
@@ -164,12 +193,56 @@ func chromaCSS(style, scope string) string {
 	return out.String()
 }
 
+// pageURL is base for page 1, else base with ?page=n (base may have a query).
+func pageURL(base string, n int) string {
+	if n <= 1 {
+		return base
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+	q := u.Query()
+	q.Set("page", strconv.Itoa(n))
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+// pageParam reads ?page=: absent is 1; page 1 lives at the base URL, so "1" is not valid.
+func pageParam(r *http.Request, pages int) (int, bool) {
+	s := r.URL.Query().Get("page")
+	if s == "" {
+		return 1, true
+	}
+	n, err := strconv.Atoi(s)
+	return n, err == nil && n >= 2 && n <= pages
+}
+
+// paginate cuts posts to one page and sets the pager. False means the page does not exist.
+func (p *pages) paginate(r *http.Request, d *pageData, posts []*content.Post, base string) bool {
+	size := p.cfg.PageSize
+	d.Pages = max(1, (len(posts)+size-1)/size)
+	var ok bool
+	if d.Page, ok = pageParam(r, d.Pages); !ok {
+		return false
+	}
+	start := (d.Page - 1) * size
+	d.Posts = posts[start:min(start+size, len(posts))]
+	d.PageBase = base
+	d.Canonical = p.abs(pageURL(base, d.Page))
+	return true
+}
+
 func (p *pages) data(r *http.Request) pageData {
 	d := pageData{
-		Lang: p.cfg.DefaultLang,
-		Path: r.URL.RequestURI(),
-		CSS:  p.cssV,
-		Site: site{Name: p.cfg.SiteName, GitHub: p.cfg.GitHubURL},
+		Lang:   p.cfg.DefaultLang,
+		Path:   r.URL.RequestURI(),
+		CSS:    p.cssV,
+		Site:   site{Name: p.cfg.SiteName, GitHub: p.cfg.GitHubURL},
+		OGType: "website",
+	}
+	if p.cfg.DefaultOGImage != "" {
+		d.Image = p.abs(assetPath(p.cfg.DefaultOGImage))
 	}
 	if c, err := r.Cookie("lang"); err == nil && slices.Contains(langs, c.Value) {
 		d.Lang = c.Value
@@ -212,22 +285,75 @@ func (p *pages) home(w http.ResponseWriter, r *http.Request) {
 		p.errorPage(w, r, http.StatusServiceUnavailable)
 		return
 	}
-	posts := ix.Posts()
-	size := p.cfg.PageSize
 	d := p.data(r)
-	d.Pages = max(1, (len(posts)+size-1)/size)
-	d.Page = 1
-	if s := r.URL.Query().Get("page"); s != "" {
-		n, err := strconv.Atoi(s)
-		if err != nil || n < 2 || n > d.Pages { // page 1 lives at "/"
-			p.errorPage(w, r, http.StatusNotFound)
-			return
-		}
-		d.Page = n
+	if !p.paginate(r, &d, ix.Posts(), "/") {
+		p.errorPage(w, r, http.StatusNotFound)
+		return
 	}
-	start := (d.Page - 1) * size
-	d.Posts = posts[start:min(start+size, len(posts))]
+	d.Tags = ix.Tags()
 	p.render(w, http.StatusOK, "home", d)
+}
+
+// tag handles /tags/{tag...}: posts with this tag, paginated.
+func (p *pages) tag(w http.ResponseWriter, r *http.Request) {
+	ix := p.index()
+	if ix == nil {
+		p.errorPage(w, r, http.StatusServiceUnavailable)
+		return
+	}
+	tag := r.PathValue("tag")
+	posts := ix.Tag(tag)
+	d := p.data(r)
+	if len(posts) == 0 || !p.paginate(r, &d, posts, tagPath(tag)) {
+		p.errorPage(w, r, http.StatusNotFound)
+		return
+	}
+	d.Tag = tag
+	p.render(w, http.StatusOK, "tag", d)
+}
+
+// search handles GET /search?q=&tag=&page=. It works without JS; search.js swaps #results.
+// shortcut: no RATE_LIMIT_SEARCH yet; it comes with the rate limiter in stage 5.
+func (p *pages) search(w http.ResponseWriter, r *http.Request) {
+	ix := p.index()
+	if ix == nil {
+		p.errorPage(w, r, http.StatusServiceUnavailable)
+		return
+	}
+	d := p.data(r)
+	d.NoIndex, d.JS, d.Tags = true, p.jsV, ix.Tags()
+	q := r.URL.Query()
+	d.Query = q.Get("q")
+	if rs := []rune(d.Query); len(rs) > content.MaxQueryRunes {
+		d.Query = string(rs[:content.MaxQueryRunes])
+	}
+	if t := q.Get("tag"); slices.Contains(d.Tags, t) {
+		d.Tag = t
+	}
+	var ok bool
+	if d.Page, ok = pageParam(r, content.MaxSearchPage); !ok {
+		p.errorPage(w, r, http.StatusNotFound)
+		return
+	}
+	size := p.cfg.PageSize
+	hits, total, err := ix.Search(d.Query, d.Tag, d.Page, size)
+	if err != nil {
+		p.log.Error("search", "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	d.Hits, d.Total = hits, total
+	d.Pages = min(max(1, (total+size-1)/size), content.MaxSearchPage)
+	if d.Page > d.Pages {
+		p.errorPage(w, r, http.StatusNotFound)
+		return
+	}
+	v := url.Values{"q": {d.Query}}
+	if d.Tag != "" {
+		v.Set("tag", d.Tag)
+	}
+	d.PageBase = "/search?" + v.Encode()
+	p.render(w, http.StatusOK, "search", d)
 }
 
 func (p *pages) post(w http.ResponseWriter, r *http.Request) {
@@ -236,15 +362,64 @@ func (p *pages) post(w http.ResponseWriter, r *http.Request) {
 		p.errorPage(w, r, http.StatusServiceUnavailable)
 		return
 	}
-	post := ix.Get(r.PathValue("slug"))
+	slug, md := strings.CutSuffix(r.PathValue("slug"), ".md") // slugs never contain "."
+	post := ix.Get(slug)
 	if post == nil {
 		p.errorPage(w, r, http.StatusNotFound)
+		return
+	}
+	if md {
+		p.markdown(w, post)
 		return
 	}
 	d := p.data(r)
 	d.Post = post
 	d.DocLang = post.Lang
+	d.OGType = "article"
+	d.Desc = post.Description
+	d.Canonical = p.abs("/posts/" + post.Slug)
+	if post.Cover != "" {
+		d.Image = p.abs(assetPath(post.Cover))
+	}
+	d.JSONLD = p.jsonLD(post, d.Canonical, d.Image)
 	p.render(w, http.StatusOK, "post", d)
+}
+
+type ldPerson struct {
+	Type string `json:"@type"`
+	Name string `json:"name"`
+	URL  string `json:"url,omitempty"`
+}
+
+type ldPosting struct {
+	Context       string   `json:"@context"`
+	Type          string   `json:"@type"`
+	Headline      string   `json:"headline"`
+	Description   string   `json:"description,omitempty"`
+	DatePublished string   `json:"datePublished"`
+	DateModified  string   `json:"dateModified"`
+	Author        ldPerson `json:"author"`
+	Image         string   `json:"image,omitempty"`
+	InLanguage    string   `json:"inLanguage"`
+	Keywords      string   `json:"keywords,omitempty"`
+	URL           string   `json:"url"`
+	MainEntity    string   `json:"mainEntityOfPage"`
+}
+
+// jsonLD is the BlogPosting for a post. json.Marshal escapes <, > and &, so it is safe in <script>.
+func (p *pages) jsonLD(post *content.Post, canonical, image string) template.JS {
+	b, err := json.Marshal(ldPosting{
+		Context: "https://schema.org", Type: "BlogPosting",
+		Headline: post.Title, Description: post.Description,
+		DatePublished: post.Date.Format(time.DateOnly), DateModified: modified(post).Format(time.DateOnly),
+		Author: ldPerson{Type: "Person", Name: p.cfg.AuthorName, URL: p.cfg.GitHubURL},
+		Image:  image, InLanguage: post.Lang, Keywords: strings.Join(post.Tags, ", "),
+		URL: canonical, MainEntity: canonical,
+	})
+	if err != nil {
+		panic(err) // only strings: cannot fail
+	}
+	return template.JS(b) // safe: json.Marshal output
 }
 
 func (p *pages) notFound(w http.ResponseWriter, r *http.Request) {
@@ -294,6 +469,15 @@ func localPath(back string) string {
 		}
 	}
 	return back
+}
+
+// assetPath is the escaped URL path of a vault asset key.
+func assetPath(key string) string { return (&url.URL{Path: "/" + key}).EscapedPath() }
+
+func (p *pages) script(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable") // URL carries a content hash
+	_, _ = w.Write(p.js)
 }
 
 func (p *pages) style(w http.ResponseWriter, _ *http.Request) {
