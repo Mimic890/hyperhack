@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"regexp"
 	"sync/atomic"
 	"testing"
 
-	"github.com/Mimic890/hyperhack/internal/config"
+	"github.com/Mimic890/hyperhack/internal/content"
 )
 
 func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
@@ -19,7 +21,7 @@ func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
 
 func TestRoutes(t *testing.T) {
 	var ready atomic.Bool
-	h := New(slog.New(slog.DiscardHandler), &config.Config{}, &ready, nil)
+	h := New(slog.New(slog.DiscardHandler), testConfig(), &ready, nil, func() *content.Index { return nil })
 
 	if got := do(h, "GET", "/healthz").Code; got != http.StatusServiceUnavailable {
 		t.Errorf("healthz before ready = %d, want 503", got)
@@ -29,8 +31,10 @@ func TestRoutes(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "ok\n" {
 		t.Errorf("healthz = %d %q", rec.Code, rec.Body)
 	}
-	if got := do(h, "POST", "/healthz").Code; got != http.StatusMethodNotAllowed {
-		t.Errorf("POST /healthz = %d, want 405", got)
+	for _, r := range []struct{ method, path string }{{"POST", "/healthz"}, {"GET", "/prefs"}, {"PUT", "/reindex"}, {"POST", "/posts/x"}, {"DELETE", "/"}} {
+		if got := do(h, r.method, r.path).Code; got != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s = %d, want 405", r.method, r.path, got)
+		}
 	}
 	rec = do(h, "GET", "/nope")
 	if rec.Code != http.StatusNotFound {
@@ -51,5 +55,25 @@ func TestPanicRecovery(t *testing.T) {
 	body, _ := io.ReadAll(rec.Body)
 	if rec.Code != http.StatusInternalServerError || string(body) != "Internal Server Error\n" {
 		t.Errorf("got %d %q", rec.Code, body)
+	}
+}
+
+// TestCSPMatchesSpec keeps the CSP header identical to SPEC → Security headers.
+func TestCSPMatchesSpec(t *testing.T) {
+	re := regexp.MustCompile("`Content-Security-Policy: (default-src 'self'[^`]*)`")
+	h := New(slog.New(slog.DiscardHandler), testConfig(), new(atomic.Bool), nil, func() *content.Index { return nil })
+	got := do(h, "GET", "/healthz").Header().Get("Content-Security-Policy")
+	for _, f := range []string{"../../SPEC.md", "../../SPEC.ru.md"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := re.FindAllSubmatch(b, -1)
+		if len(m) != 1 {
+			t.Fatalf("%s: want one service CSP, found %d", f, len(m))
+		}
+		if want := string(m[0][1]); got != want {
+			t.Errorf("CSP differs from %s:\ngot  %s\nwant %s", f, got, want)
+		}
 	}
 }

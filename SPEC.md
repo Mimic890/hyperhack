@@ -42,8 +42,8 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 | Users | One author. No registration. Public side is read-only. |
 | Backend | Go 1.27, latest stable (go1.27.3 on 2026-11-03). `go.mod`: `go 1.27` + `toolchain go1.27.3`. Builder image: `golang:1.27`. Check go.dev/dl before starting; Dependabot keeps it current. |
 | Frontend | Server-side rendering with `html/template`. No framework. Minimal vanilla JS: votes, ALTCHA, view and time beacon. |
-| Themes | Light and dark, toggle in the top bar. System theme by default until the visitor picks one. The choice is stored in a cookie and rendered on the server (no inline JS). |
-| Design | Beautiful, minimal, responsive. Designed during implementation. |
+| Themes | Light and dark, toggle in the top bar. System theme by default until the visitor picks one. The choice is stored in a cookie and rendered on the server (no inline JS). The toggle is a form that posts to `/prefs`, so it works without JS. |
+| Design | Beautiful, minimal, responsive. Designed during implementation. Fonts: Inter (text) and JetBrains Mono (code), OFL, self-hosted, Latin + Cyrillic subsets. |
 | Languages | Code, docs, UI: English. UI also in Russian. Default: `DEFAULT_LANG` (`en` / `ru`) in `.env`. Visitor switch in the top bar; the choice is stored in a cookie (the server must know it to render the page). Post text is not translated. |
 | Storage | Garage (S3 API), path-style addressing. Client: `github.com/minio/minio-go/v7`. |
 | Post format | One `.md` = one post. Metadata: Obsidian properties (YAML frontmatter). |
@@ -118,6 +118,7 @@ Proposed variables (final names set during implementation):
 ## Bucket layout
 
 - `assets/` — all assets: covers, images in posts. Decided.
+- `assets/logo.svg` — optional site logo in the top bar. Without it the service shows a built-in mark.
 - The service ignores keys where any path segment starts with `.` or `_` (same rule as Remotely Save).
 
 ### Posts
@@ -258,7 +259,7 @@ The service stores per-post metrics only. Storage: SQLite.
 ### Estimated reading time
 
 - Public: shown on the post (e.g. "5 min read").
-- Computed from the post text at render time: word count / `READING_WPM`.
+- Computed from the post text at render time: word count / `READING_WPM`, rounded up, at least 1 minute.
 - Proposed: code blocks and images are counted separately.
 - Not related to measured time on page.
 
@@ -415,6 +416,8 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 | `/reindex` | POST | private network | Caddy block, `REINDEX_ALLOW`, `REINDEX_TOKEN` |
 | `/metrics` | GET | private network | Caddy block, `METRICS_ALLOW` |
 | `/healthz` | GET | public | constant body, no data |
+| `/prefs` | POST | public | form body ≤ 4 KB, enum check for `theme` / `lang`, redirect only to a local path |
+| `/static/*` | GET | public | embedded CSS and fonts only, no directory listing |
 
 Other methods → `405`. Unknown paths → `404`.
 
@@ -606,3 +609,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-03 — Go 1.27 (go1.27.3).
 - 2026-11-03 — Config defaults: `POLL_INTERVAL` 60s, `READING_WPM` 200, `LOG_LEVEL` info, `LOG_FORMAT` json, `DATA_DIR` /data, `VAULT_DIR` /vault, `ALTCHA_MAX_NUMBER` 100000, `S3_REGION` garage. Log component `main`. The service listens on fixed port 8080.
 - 2026-11-03 — Sync: S3 client `minio-go/v7`, frontmatter via `go.yaml.in/yaml/v3`, GFM. Mirror state in `VAULT_DIR/.hyperhack.json`. S3 down at startup: serve from the mirror; exit 1 only with no mirror. No Remotely Save prefix. Keys with a `.` or `_` segment are ignored (was proposed). `MAX_OBJECTS` counts all keys. An invalid frontmatter field skips the post. 3 S3 attempts per poll. `/reindex` waits for the sync and returns `204`.
+- 2026-11-04 — Pages: theme and language switch via a no-JS form `POST /prefs`; cookies `theme` / `lang` (`HttpOnly; SameSite=Lax; Max-Age=1 year`, `Secure` on https). Logo from `assets/logo.svg`, built-in mark otherwise. Fonts Inter + JetBrains Mono, self-hosted. Pagination `/?page=N`: page 1 is `/`, other out-of-range values → `404`. `<html lang>` from the post; the top bar keeps the UI language. CSS and fonts at `/static/*`.

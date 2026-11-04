@@ -117,6 +117,9 @@ func TestSync(t *testing.T) {
 	if got := slugs(s); !slices.Equal(got, []string{"one", "two"}) {
 		t.Fatalf("slugs = %v", got)
 	}
+	if s.Index().Logo {
+		t.Error("Logo without assets/logo.svg")
+	}
 	for _, f := range []string{"one.md", "deep/folder/two.md", "broken.md", "assets/img/a.png", mirror.StateFile} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("missing %s: %v", f, err)
@@ -134,7 +137,8 @@ func TestSync(t *testing.T) {
 		t.Fatalf("second sync: err %v, gets %d → %d", err, gets, b.gets)
 	}
 
-	// Update, delete, fix the broken post.
+	// Update, delete, fix the broken post, add a logo.
+	b.set(LogoKey, "e1", "<svg/>")
 	b.set("one.md", "e2", post("One v2", "one"))
 	b.set("broken.md", "e2", post("Fixed", "fixed"))
 	delete(b.objs, "deep/folder/two.md")
@@ -146,6 +150,9 @@ func TestSync(t *testing.T) {
 	}
 	if s.Index().Get("one").Title != "One v2" {
 		t.Error("one.md not updated")
+	}
+	if !s.Index().Logo {
+		t.Error("Logo not set after assets/logo.svg appeared")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "deep/folder/two.md")); err == nil {
 		t.Error("deleted object still on disk")

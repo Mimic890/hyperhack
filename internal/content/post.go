@@ -28,6 +28,7 @@ type Post struct {
 	Cover       string // key inside assets/, empty if not set
 	Lang        string
 	Draft       bool
+	Words       int           // body word count, for reading time
 	HTML        template.HTML // sanitized
 }
 
@@ -127,6 +128,7 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 			return nil, errors.New("no slug: set slug in frontmatter")
 		}
 	}
+	p.Words = len(bytes.Fields(body))
 	if p.HTML, err = r.render(body); err != nil {
 		return nil, fmt.Errorf("render: %w", err)
 	}

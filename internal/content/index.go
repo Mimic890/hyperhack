@@ -10,6 +10,7 @@ import (
 type Index struct {
 	posts  []*Post // newest first
 	bySlug map[string]*Post
+	Logo   bool // assets/logo.svg is in the mirror
 }
 
 // NewIndex builds an index. Drafts are left out.

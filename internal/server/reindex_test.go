@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Mimic890/hyperhack/internal/config"
+	"github.com/Mimic890/hyperhack/internal/content"
 )
 
 const token = "0123456789abcdef0123456789abcdef"
@@ -27,8 +28,9 @@ func TestReindex(t *testing.T) {
 		}
 		return nil
 	}
-	cfg := &config.Config{ReindexToken: token, ReindexAllow: allow, TrustedProxies: trusted}
-	h := New(slog.New(slog.DiscardHandler), cfg, new(atomic.Bool), sync)
+	cfg := testConfig()
+	cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies = token, allow, trusted
+	h := New(slog.New(slog.DiscardHandler), cfg, new(atomic.Bool), sync, func() *content.Index { return nil })
 
 	req := func(remote, xff, auth string) int {
 		r := httptest.NewRequest("POST", "/reindex", nil)

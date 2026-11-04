@@ -3,3 +3,4 @@ data/
 vault/
 /hyperhack
 /dist/
+*:Zone.Identifier

@@ -1,0 +1,22 @@
+{{define "title"}}{{.Site.Name}}{{if gt .Page 1}} — {{t "page_of" "n" .Page "m" .Pages}}{{end}}{{end}}
+{{define "main"}}
+<section aria-labelledby="newest">
+  <h1 id="newest" class="section-title">{{t "newest"}}</h1>
+  {{- range .Posts}}
+  <article class="card">
+    <h2><a href="/posts/{{.Slug}}">{{.Title}}</a></h2>
+    <p class="meta">{{template "date" .Date}} · {{t "min_read" "n" (minutes .Words)}}</p>
+    {{- with .Description}}<p class="desc">{{.}}</p>{{end}}
+  </article>
+  {{- else}}
+  <p class="empty">{{t "no_posts"}}</p>
+  {{- end}}
+</section>
+{{- if gt .Pages 1}}
+<nav class="pager" aria-label="{{t "pages"}}">
+  {{- if gt .Page 1}}<a rel="prev" href="{{if eq .Page 2}}/{{else}}/?page={{add .Page -1}}{{end}}">← {{t "newer"}}</a>{{else}}<span></span>{{end}}
+  <span class="meta">{{t "page_of" "n" .Page "m" .Pages}}</span>
+  {{- if lt .Page .Pages}}<a rel="next" href="/?page={{add .Page 1}}">{{t "older"}} →</a>{{else}}<span></span>{{end}}
+</nav>
+{{- end}}
+{{end}}

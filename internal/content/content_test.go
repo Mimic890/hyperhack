@@ -31,6 +31,9 @@ func TestParse(t *testing.T) {
 	if strings.Join(p.Tags, ",") != "go,selfhost" {
 		t.Errorf("tags = %q", p.Tags)
 	}
+	if p.Words != 2 {
+		t.Errorf("words = %d, want 2", p.Words)
+	}
 	if !strings.Contains(string(p.HTML), "<strong>world</strong>") {
 		t.Errorf("html = %s", p.HTML)
 	}
