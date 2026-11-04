@@ -1,0 +1,8 @@
+# Local build from this checkout. Use only with: docker compose -f compose.dev.yml up --build
+services:
+  hyperhack:
+    extends:
+      file: docker-compose.yml
+      service: hyperhack
+    image: hyperhack:dev
+    build: .
