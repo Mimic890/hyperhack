@@ -38,7 +38,7 @@ The bucket is the source of truth. The service polls it and mirrors it to `./vau
 
 ## Quick start
 
-1. Make a folder with the compose file and the env file:
+1. Download the compose file and the env file:
 
    ```sh
    mkdir hyperhack && cd hyperhack
@@ -47,13 +47,9 @@ The bucket is the source of truth. The service polls it and mirrors it to `./vau
    chmod 600 .env
    ```
 
-2. Edit `.env` (see [Configuration](#configuration)). Generate each secret with:
+   `docker-compose.yml` only pulls the released image from GHCR and pins the latest release, for example `ghcr.io/mimic890/hyperhack:0.1.0`. Image tags are the release version without the `v`, and they are never overwritten. There is no `latest` tag.
 
-   ```sh
-   openssl rand -base64 48
-   ```
-
-3. Create the data folders. The container runs as user `10001`:
+2. Create the data folders. The container runs as user `10001`:
 
    ```sh
    mkdir data vault
@@ -62,9 +58,13 @@ The bucket is the source of truth. The service polls it and mirrors it to `./vau
 
    Caddy must be able to read `vault/assets/`. The service writes folders as `0755` and files as `0644`. The SQLite file is `0600`.
 
-4. In `docker-compose.yml`, set `image:` to a released version and remove the `build: .` line. Tags are semver and are never overwritten. There is no `latest` tag.
+3. Fill `.env` (see [Configuration](#configuration)). Generate each secret with:
 
-5. Verify the image and start the service:
+   ```sh
+   openssl rand -base64 48
+   ```
+
+4. Verify the image and start the service. Use the tag from `image:` in `docker-compose.yml`:
 
    ```sh
    gh attestation verify oci://ghcr.io/mimic890/hyperhack:<version> -R Mimic890/hyperhack
@@ -75,7 +75,7 @@ The bucket is the source of truth. The service polls it and mirrors it to `./vau
 
    On the first start the service needs the bucket. If S3 is unreachable and there is no mirror yet, it exits with code 1. Later starts build the index from the mirror and do not wait for S3.
 
-6. Set up Caddy (see [Caddy](#caddy)) and set `TRUSTED_PROXIES`.
+5. Set up Caddy (see [Caddy](#caddy)) and set `TRUSTED_PROXIES`.
 
 The service listens on port `8080` inside the container. Compose publishes it on `127.0.0.1:8080` only. Do not expose it to the internet: Caddy is the only public entry.
 
@@ -384,11 +384,20 @@ Vote cookies (`vid`) are random and do not depend on any secret.
 
 ## Upgrading
 
-Set the new version in `docker-compose.yml`, verify it with `gh attestation verify`, then:
+Versions are listed under [tags](https://github.com/Mimic890/hyperhack/tags). Release `v0.2.0` is image `ghcr.io/mimic890/hyperhack:0.2.0`.
 
-```sh
-docker compose pull && docker compose up -d
-```
+1. Back up `data/` (see [Backups](#backups)).
+2. In `docker-compose.yml`, set the new tag in `image:`. If you have not changed the file, you can download it again from `main` instead: it pins the latest release.
+3. Verify the new image, pull it and restart:
+
+   ```sh
+   gh attestation verify oci://ghcr.io/mimic890/hyperhack:<version> -R Mimic890/hyperhack
+   docker compose pull
+   docker compose up -d
+   docker compose ps        # wait for "healthy"
+   ```
+
+To roll back, set the old tag and run `docker compose up -d`. If the old version does not start, restore `data/` from the backup.
 
 ## Development
 
@@ -397,8 +406,10 @@ Go 1.27 (`toolchain go1.27.3`).
 ```sh
 set -a; . ./.env; set +a
 DATA_DIR=./data VAULT_DIR=./vault LOG_FORMAT=text go run .
-# or: docker compose up --build
+# or, in Docker: docker compose -f compose.dev.yml up --build
 ```
+
+`compose.dev.yml` builds the image from the checkout as `hyperhack:dev` and otherwise uses the settings of `docker-compose.yml`. Compose never loads it on its own, so production stays on the released image.
 
 Checks, run before every commit and in CI:
 

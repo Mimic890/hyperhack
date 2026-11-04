@@ -109,7 +109,8 @@ Proposed variables (final names set during implementation):
 ## Deployment
 
 - The service runs in Docker and starts with Docker Compose.
-- GitHub Actions builds the image. Proposed: push to GHCR (`ghcr.io`).
+- GitHub Actions builds the image and pushes it to GHCR (`ghcr.io`).
+- `docker-compose.yml` is for production: it only pulls the released image from GHCR, with no `build:`, and pins the latest release. Local builds use `compose.dev.yml` (extends the production service, adds `build: .`, image `hyperhack:dev`), run only with `docker compose -f compose.dev.yml`. No `docker-compose.override.yml`: Compose loads it automatically, so it would reach production.
 - Compose uses bind mounts to subfolders (`./data`, …). No named volumes.
 - The service port is not published to the internet: localhost, Docker network or mesh IP only. The reverse proxy (Caddy) handles TLS.
 - The agent writes `.gitignore` (at least: `.env`, `data/`, build output).
@@ -556,7 +557,7 @@ Other methods → `405`. Unknown paths → `404`.
 - Dependabot: `gomod`, `github-actions`, `docker`.
 - CI checks: `go vet`, `staticcheck`, `govulncheck`, tests with `-race`, CodeQL (Go).
 - Release: build image, push to GHCR, attest with `actions/attest` (`push-to-registry: true`). Verify on the host: `gh attestation verify oci://ghcr.io/<owner>/hyperhack:<version> -R <owner>/hyperhack`.
-- Image tags: semver, never overwritten. Compose pins a version, not `latest`.
+- Image tags: semver without the `v` (git tag `v0.1.0` → image `0.1.0`), never overwritten. Compose pins a version, not `latest`. After a release, a PR moves the tag in `docker-compose.yml` to the new version.
 - Repo settings: branch protection on `main` (PR and checks required, no force push), secret scanning + push protection, private vulnerability reporting. `SECURITY.md` explains how to report.
 
 ### Security tests
@@ -567,8 +568,6 @@ Other methods → `405`. Unknown paths → `404`.
 - Rate limiter, ALTCHA replay, Origin check, private endpoint CIDR checks.
 
 ## Proposed (not confirmed)
-
-- Image registry: GHCR.
 
 ## Open questions
 
@@ -617,3 +616,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-04 — Search, tags, RSS, SEO: Bleve `v2.6.1`, in-memory index, one document mapping per language (`en`, `ru`). Fuzziness by word length: ≤ 3 letters 0, ≤ 6 letters 1, longer 2; prefix on the last word. Snippets keep only `<mark>`. Search works without JS; `search.js` swaps the results while typing (debounced). Results page `noindex`. Tags lower case, Obsidian characters, `/tags/<tag>` paginated like the main page. 24 tag hue buckets (FNV-1a hash), contrast checked in tests. RSS: `dc:creator` from `AUTHOR_NAME`, `atom:updated` from `updated`. Image `width`/`height` read from the mirror (`golang.org/x/image` for WebP); an asset change re-renders all posts. IndexNow: one ping per sync with new, changed and removed post URLs, not on the first index load. New `AUTHOR_NAME`; `DEFAULT_OG_IMAGE` is a path inside `assets/`.
 - 2026-11-04 — Metrics, votes, limits: SQLite `DATA_DIR/hyperhack.db` (`modernc.org/sqlite` `v1.61.0`, `0600`, WAL). All-time counters per post and label (Grafana gets daily trends with `increase()`), daily views only for "Popular" (pruned after `POPULAR_DAYS`). Search queries: live requests from `search.js` (`X-Search: live`) are not stored, the settled query is; TTL 90 days, at most 10 000 rows, top 20 in `/metrics`, refreshed every 5 min. ALTCHA: `altcha-lib-go/v2` `v2.4.1`, v2 challenge with SHA-256, cost 1, `uint32` counter up to `ALTCHA_MAX_NUMBER`, key signature; own small solver `static/altcha.js` instead of the widget; signing keys derived from `ALTCHA_HMAC_KEY`; replay map capped at 100 000. Beacon: a delta on every hide and `pagehide`, sent with `fetch(…, {keepalive: true})` (JSON body), each with a random per-page-view id; the server sums time per view and clamps the sum to 4 h; time on page = average over views with reading time. Views and read depth: once per visitor per post per day; daily hashes in memory only (cap 200 000), `ip_prefix` = IPv4 address or IPv6 `/64`. Source `internal` for referrers from the site itself. Outbound hosts limited to links in the post. `/api/altcha` and `/api/vote` share `RATE_LIMIT_VOTE`; limiter tracks at most 10 000 clients. Vote cookie stored as SHA-256. "Popular" after "Newest" on page 1. `/metrics` in Prometheus text format written with the standard library.
 - 2026-11-04 — Grafana, Caddy, README: dashboard `grafana/hyperhack.json` for a Prometheus-type data source on VictoriaMetrics (uses the VictoriaMetrics function `sort_by_label_numeric`); daily bars cover the day that starts at the bar, so today is shown. `Caddyfile.example` for Caddy `v2.11.7` with `caddy-ratelimit` `v0.1.0` (1200 requests per minute per client IP; `/static/*` and `/assets/*` are not counted) and `caddy-crowdsec-bouncer` `v0.14.1`; `/metrics` and `/reindex` (and their subpaths) answer `404` on the public domain; compression `zstd`/`gzip`. README: behind Caddy on the host, `TRUSTED_PROXIES` is the gateway of the Compose network. Full README in English and Russian.
+- 2026-11-04 — Production Compose: image registry GHCR (confirmed). `docker-compose.yml` only pulls the released image, no `build:`, pinned to the latest release (`0.1.0`; image tags are the git tag without `v`). Local builds in `compose.dev.yml`, used only with `-f`; no `docker-compose.override.yml`. README Quick start uses the downloaded `docker-compose.yml` as is, and README documents upgrades and rollback.

@@ -38,7 +38,7 @@ VictoriaMetrics ──scrape /metrics──▶ hyperhack ;  Grafana ──▶ Vi
 
 ## Быстрый старт
 
-1. Создайте папку с compose-файлом и файлом окружения:
+1. Скачайте compose-файл и файл окружения:
 
    ```sh
    mkdir hyperhack && cd hyperhack
@@ -47,13 +47,9 @@ VictoriaMetrics ──scrape /metrics──▶ hyperhack ;  Grafana ──▶ Vi
    chmod 600 .env
    ```
 
-2. Заполните `.env` (см. [Настройки](#настройки)). Каждый секрет генерируйте так:
+   `docker-compose.yml` только скачивает выпущенный образ из GHCR и закрепляет последний релиз, например `ghcr.io/mimic890/hyperhack:0.1.0`. Тег образа — версия релиза без `v`, теги никогда не перезаписываются. Тега `latest` нет.
 
-   ```sh
-   openssl rand -base64 48
-   ```
-
-3. Создайте папки для данных. Контейнер работает от пользователя `10001`:
+2. Создайте папки для данных. Контейнер работает от пользователя `10001`:
 
    ```sh
    mkdir data vault
@@ -62,9 +58,13 @@ VictoriaMetrics ──scrape /metrics──▶ hyperhack ;  Grafana ──▶ Vi
 
    Caddy должен иметь право читать `vault/assets/`. Сервис создаёт папки с правами `0755`, файлы — `0644`. Файл SQLite — `0600`.
 
-4. В `docker-compose.yml` укажите в `image:` выпущенную версию и удалите строку `build: .`. Теги — semver, они никогда не перезаписываются. Тега `latest` нет.
+3. Заполните `.env` (см. [Настройки](#настройки)). Каждый секрет генерируйте так:
 
-5. Проверьте образ и запустите сервис:
+   ```sh
+   openssl rand -base64 48
+   ```
+
+4. Проверьте образ и запустите сервис. Тег возьмите из `image:` в `docker-compose.yml`:
 
    ```sh
    gh attestation verify oci://ghcr.io/mimic890/hyperhack:<version> -R Mimic890/hyperhack
@@ -75,7 +75,7 @@ VictoriaMetrics ──scrape /metrics──▶ hyperhack ;  Grafana ──▶ Vi
 
    При первом запуске сервису нужен бакет. Если S3 недоступен, а зеркала ещё нет, сервис завершается с кодом 1. При следующих запусках индекс строится из зеркала, и сервис не ждёт S3.
 
-6. Настройте Caddy (см. [Caddy](#caddy)) и задайте `TRUSTED_PROXIES`.
+5. Настройте Caddy (см. [Caddy](#caddy)) и задайте `TRUSTED_PROXIES`.
 
 Внутри контейнера сервис слушает порт `8080`. Compose публикует его только на `127.0.0.1:8080`. Не открывайте его в интернет: единственный публичный вход — Caddy.
 
@@ -384,11 +384,20 @@ Cookie голосов (`vid`) случайные и не зависят ни о�
 
 ## Обновление
 
-Укажите новую версию в `docker-compose.yml`, проверьте её через `gh attestation verify`, затем:
+Версии перечислены в [тегах](https://github.com/Mimic890/hyperhack/tags). Релизу `v0.2.0` соответствует образ `ghcr.io/mimic890/hyperhack:0.2.0`.
 
-```sh
-docker compose pull && docker compose up -d
-```
+1. Сделайте резервную копию `data/` (см. [Резервные копии](#резервные-копии)).
+2. В `docker-compose.yml` укажите новый тег в `image:`. Если вы не меняли файл, можно вместо этого скачать его заново из `main`: там закреплён последний релиз.
+3. Проверьте новый образ, скачайте его и перезапустите сервис:
+
+   ```sh
+   gh attestation verify oci://ghcr.io/mimic890/hyperhack:<version> -R Mimic890/hyperhack
+   docker compose pull
+   docker compose up -d
+   docker compose ps        # дождитесь "healthy"
+   ```
+
+Чтобы откатиться, верните старый тег и выполните `docker compose up -d`. Если старая версия не запускается, восстановите `data/` из резервной копии.
 
 ## Разработка
 
@@ -397,8 +406,10 @@ Go 1.27 (`toolchain go1.27.3`).
 ```sh
 set -a; . ./.env; set +a
 DATA_DIR=./data VAULT_DIR=./vault LOG_FORMAT=text go run .
-# или: docker compose up --build
+# или в Docker: docker compose -f compose.dev.yml up --build
 ```
+
+`compose.dev.yml` собирает образ из рабочей копии как `hyperhack:dev`, остальные настройки берёт из `docker-compose.yml`. Compose сам его не подключает, поэтому в продакшене остаётся выпущенный образ.
 
 Проверки, перед каждым коммитом и в CI:
 
