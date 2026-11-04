@@ -238,11 +238,12 @@ xcaddy build v2.11.7 \
 example.com {
 	crowdsec
 
-	# Per client IP, all paths. One page view is about 10 requests.
-	rate_limit {
+	# Per client IP. Static files and assets are not counted.
+	@limited not path /static/* /assets/*
+	rate_limit @limited {
 		zone per_client {
 			key {remote_host}
-			events 300
+			events 1200
 			window 1m
 		}
 	}
@@ -286,7 +287,8 @@ example.com {
 
 - `CROWDSEC_API_URL` и `CROWDSEC_API_KEY` берутся из окружения Caddy при загрузке конфига. LAPI CrowdSec по умолчанию тоже занимает порт `8080`, поэтому, если оба работают на хосте, перенесите один из них.
 - Сервис сам ставит CSP и заголовки безопасности. Caddy добавляет только HSTS и убирает `Server`.
-- Без плагинов удалите строки `order`, `crowdsec` и `rate_limit`. Сервис всё равно ограничивает свои эндпоинты записи.
+- Общий лимит — 1200 запросов в минуту на IP клиента. Он считает страницы и вызовы API; `/static/*` и `/assets/*` не учитываются, поэтому картинки и шрифты его не расходуют.
+- Без плагинов удалите строки `order`, `crowdsec`, `@limited` и `rate_limit`. Сервис всё равно ограничивает свои эндпоинты записи.
 
 ### TRUSTED_PROXIES
 

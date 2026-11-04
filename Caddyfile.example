@@ -19,11 +19,12 @@
 example.com {
 	crowdsec
 
-	# Per client IP, all paths. One page view is about 10 requests.
-	rate_limit {
+	# Per client IP. Static files and assets are not counted.
+	@limited not path /static/* /assets/*
+	rate_limit @limited {
 		zone per_client {
 			key {remote_host}
-			events 300
+			events 1200
 			window 1m
 		}
 	}

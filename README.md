@@ -238,11 +238,12 @@ This is [Caddyfile.example](Caddyfile.example). Replace `example.com` and `/srv/
 example.com {
 	crowdsec
 
-	# Per client IP, all paths. One page view is about 10 requests.
-	rate_limit {
+	# Per client IP. Static files and assets are not counted.
+	@limited not path /static/* /assets/*
+	rate_limit @limited {
 		zone per_client {
 			key {remote_host}
-			events 300
+			events 1200
 			window 1m
 		}
 	}
@@ -286,7 +287,8 @@ example.com {
 
 - `CROWDSEC_API_URL` and `CROWDSEC_API_KEY` are read from Caddy's environment when the config loads. The CrowdSec LAPI also defaults to port `8080`, so move one of them if both run on the host.
 - The service sets its own CSP and security headers. Caddy adds only HSTS and removes `Server`.
-- Without the plugins, delete the `order`, `crowdsec` and `rate_limit` lines. The service still rate-limits its write endpoints.
+- The site-wide limit is 1200 requests per minute per client IP. It counts pages and API calls; `/static/*` and `/assets/*` are not counted, so images and fonts never use it up.
+- Without the plugins, delete the `order`, `crowdsec`, `@limited` and `rate_limit` lines. The service still rate-limits its write endpoints.
 
 ### TRUSTED_PROXIES
 
