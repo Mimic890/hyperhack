@@ -41,5 +41,12 @@
   "no_results": "Nothing found. Try other words.",
   "results": "Search results",
   "prev": "Previous",
-  "next": "Next"
+  "next": "Next",
+  "popular": "Popular",
+  "views": "Views: {n}",
+  "like": "Like",
+  "dislike": "Dislike",
+  "vote_error": "Could not save the vote. Try again.",
+  "too_many": "Too many requests",
+  "too_many_text": "Please wait a moment and try again."
 }

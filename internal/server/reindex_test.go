@@ -30,7 +30,9 @@ func TestReindex(t *testing.T) {
 	}
 	cfg := testConfig()
 	cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies = token, allow, trusted
-	h := New(slog.New(slog.DiscardHandler), cfg, new(atomic.Bool), sync, func() *content.Index { return nil })
+	d := testDeps(t, func() *content.Index { return nil })
+	d.Sync = sync
+	h := New(slog.New(slog.DiscardHandler), cfg, d)
 
 	req := func(remote, xff, auth string) int {
 		r := httptest.NewRequest("POST", "/reindex", nil)

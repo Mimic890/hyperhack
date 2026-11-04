@@ -16,6 +16,7 @@ import (
 	"github.com/Mimic890/hyperhack/internal/content"
 	"github.com/Mimic890/hyperhack/internal/mirror"
 	"github.com/Mimic890/hyperhack/internal/server"
+	"github.com/Mimic890/hyperhack/internal/store"
 	"github.com/Mimic890/hyperhack/internal/syncer"
 )
 
@@ -44,6 +45,12 @@ func run() int {
 		mainLog.Error("open vault dir", "err", err)
 		return 1
 	}
+	st, err := store.Open(cfg.DataDir, log)
+	if err != nil {
+		mainLog.Error("open SQLite", "err", err)
+		return 1
+	}
+	defer func() { _ = st.Close() }()
 	bucket, err := syncer.NewS3(cfg.S3Endpoint, cfg.S3Region, cfg.S3Bucket, cfg.S3AccessKey, cfg.S3SecretKey)
 	if err != nil {
 		mainLog.Error("S3 client", "err", err)
@@ -64,7 +71,7 @@ func run() int {
 	httpLog := log.With("component", "http")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(httpLog, cfg, &ready, syn.Sync, syn.Index),
+		Handler:           server.New(log, cfg, server.Deps{Ready: &ready, Sync: syn.Sync, Index: syn.Index, Store: st, SyncStats: syn.Stats}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -82,6 +89,7 @@ func run() int {
 	defer stopSync()
 	syncErr := make(chan error, 1)
 	go func() { syncErr <- syn.Run(syncCtx, &ready) }()
+	go prune(syncCtx, st, cfg.PopularDays)
 
 	code := 0
 	select {
@@ -108,6 +116,27 @@ func run() int {
 		return 1
 	}
 	return code
+}
+
+// Search query TTL and cap (SPEC → Data: bounded growth).
+const (
+	searchTTLDays = 90
+	maxSearches   = 10000
+)
+
+// prune keeps the SQLite tables bounded: hourly, and once at start.
+func prune(ctx context.Context, st *store.Store, popularDays int) {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		now := time.Now()
+		_ = st.Prune(ctx, store.Day(now.AddDate(0, 0, -searchTTLDays)), store.Day(now.AddDate(0, 0, -popularDays)), maxSearches) // logged by store
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 func newLogger(cfg *config.Config) *slog.Logger {

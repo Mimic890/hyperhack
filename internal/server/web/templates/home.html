@@ -10,4 +10,14 @@
   {{- end}}
 </section>
 {{- template "pager" .}}
+{{- with .Popular}}
+<section class="popular" aria-labelledby="popular">
+  <h2 id="popular" class="section-title">{{t "popular"}}</h2>
+  <ol>
+    {{- range .}}
+    <li><a href="/posts/{{.Slug}}">{{.Title}}</a></li>
+    {{- end}}
+  </ol>
+</section>
+{{- end}}
 {{end}}

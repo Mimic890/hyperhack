@@ -16,11 +16,33 @@ import (
 
 	"github.com/Mimic890/hyperhack/internal/config"
 	"github.com/Mimic890/hyperhack/internal/content"
+	"github.com/Mimic890/hyperhack/internal/store"
+	"github.com/Mimic890/hyperhack/internal/syncer"
 )
 
 func testConfig() *config.Config {
 	u, _ := url.Parse("https://example.com")
-	return &config.Config{SiteName: "Test <Blog>", SiteURL: u, DefaultLang: "en", ReadingWPM: 200, PageSize: 2}
+	private, _ := config.ParsePrefixes("127.0.0.0/8,10.0.0.0/8,192.0.2.0/24")
+	lots := config.Rate{N: 1000, Per: time.Minute}
+	return &config.Config{
+		SiteName: "Test <Blog>", SiteURL: u, DefaultLang: "en", ReadingWPM: 200, PageSize: 2,
+		AltchaHMACKey: "0123456789abcdef0123456789abcdef", VisitorSecret: "visitor-secret-visitor-secret-32b",
+		AltchaExpires: 5 * time.Minute, AltchaMaxNumber: 1000, PopularDays: 30, PopularLimit: 5,
+		RateVote: lots, RateBeacon: lots, RateSearch: lots, RateReindex: lots, MetricsAllow: private,
+	}
+}
+
+// testDeps returns working dependencies with a fresh SQLite store.
+func testDeps(t *testing.T, index func() *content.Index) Deps {
+	t.Helper()
+	st, err := store.Open(t.TempDir(), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ready := new(atomic.Bool)
+	ready.Store(true)
+	return Deps{Ready: ready, Index: index, Store: st, SyncStats: func() syncer.Stats { return syncer.Stats{Objects: 3} }}
 }
 
 func testIndex(n int) *content.Index {
@@ -42,15 +64,15 @@ func testIndex(n int) *content.Index {
 type testSite struct {
 	h   http.Handler
 	idx atomic.Pointer[content.Index]
+	d   Deps
 }
 
 func newSite(t *testing.T, cfg *config.Config, ix *content.Index) *testSite {
 	t.Helper()
 	s := &testSite{}
 	s.idx.Store(ix)
-	var ready atomic.Bool
-	ready.Store(true)
-	s.h = New(slog.New(slog.DiscardHandler), cfg, &ready, nil, s.idx.Load)
+	s.d = testDeps(t, s.idx.Load)
+	s.h = New(slog.New(slog.DiscardHandler), cfg, s.d)
 	return s
 }
 

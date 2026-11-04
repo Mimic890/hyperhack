@@ -13,12 +13,23 @@ import (
 
 	"github.com/Mimic890/hyperhack/internal/config"
 	"github.com/Mimic890/hyperhack/internal/content"
+	"github.com/Mimic890/hyperhack/internal/store"
+	"github.com/Mimic890/hyperhack/internal/syncer"
 )
 
-// New returns the root handler. ready gates /healthz; sync runs a bucket sync for /reindex;
-// index returns the current posts (nil before the first load).
-func New(log *slog.Logger, cfg *config.Config, ready *atomic.Bool, sync func(context.Context) error, index func() *content.Index) http.Handler {
-	p := newPages(log, cfg, index)
+// Deps is what the handlers need from the rest of the service.
+type Deps struct {
+	Ready     *atomic.Bool                // gates /healthz
+	Sync      func(context.Context) error // bucket sync for /reindex
+	Index     func() *content.Index       // current posts, nil before the first load
+	Store     *store.Store
+	SyncStats func() syncer.Stats
+}
+
+// New returns the root handler. log is the base logger; components are added here.
+func New(log *slog.Logger, cfg *config.Config, d Deps) http.Handler {
+	p := newPages(log, cfg, d)
+	ready := d.Ready
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", p.home)
 	mux.HandleFunc("GET /posts/{slug}", p.post) // also /posts/<slug>.md
@@ -35,12 +46,16 @@ func New(log *slog.Logger, cfg *config.Config, ready *atomic.Bool, sync func(con
 	}
 	mux.HandleFunc("POST /prefs", p.prefs)
 	mux.HandleFunc("GET /static/style.css", p.style)
-	mux.HandleFunc("GET /static/search.js", p.script)
+	mux.HandleFunc("GET /static/{script}", p.script)
+	mux.HandleFunc("GET /api/altcha", p.apiAltcha)
+	mux.HandleFunc("POST /api/vote", p.apiVote)
+	mux.HandleFunc("POST /api/beacon", p.apiBeacon)
+	mux.HandleFunc("GET /metrics", p.metricsPage)
 	mux.HandleFunc("GET /static/fonts/{file}", p.font)
 	mux.HandleFunc("GET /", p.notFound)
-	mux.Handle("POST /reindex", reindex(log, cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies, sync))
+	mux.Handle("POST /reindex", reindex(p.log, cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies, p.limit(p.lim.reindex, "reindex"), d.Sync))
 	// The "GET /" catch-all would answer GET on POST-only paths with 404; SPEC wants 405.
-	for _, path := range []string{"/reindex", "/prefs"} {
+	for _, path := range []string{"/reindex", "/prefs", "/api/vote", "/api/beacon"} {
 		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Allow", http.MethodPost)
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -55,11 +70,11 @@ func New(log *slog.Logger, cfg *config.Config, ready *atomic.Bool, sync func(con
 		}
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	return middleware(log, mux)
+	return middleware(p.log, p.metrics, mux)
 }
 
-// middleware sets security headers, recovers panics and logs each request on DEBUG.
-func middleware(log *slog.Logger, next http.Handler) http.Handler {
+// middleware sets security headers, recovers panics, counts and logs each request on DEBUG.
+func middleware(log *slog.Logger, m *registry, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		id := requestID()
@@ -74,6 +89,7 @@ func middleware(log *slog.Logger, next http.Handler) http.Handler {
 					http.Error(sw, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				}
 			}
+			m.request(r.Pattern, sw.code(), time.Since(start)) // the mux sets Pattern on r
 			log.Debug("request", "request_id", id, "method", r.Method, "path", r.URL.Path, "status", sw.code(), "duration", time.Since(start))
 		}()
 		securityHeaders(w.Header())

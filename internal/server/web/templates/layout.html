@@ -34,7 +34,7 @@
 <script type="application/ld+json">{{.}}</script>
 {{- end}}
 <link rel="stylesheet" href="{{.CSS}}">
-{{- with .JS}}
+{{- range .JS}}
 <script src="{{.}}" defer></script>
 {{- end}}
 </head>

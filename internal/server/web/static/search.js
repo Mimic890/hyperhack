@@ -4,12 +4,14 @@
   const results = document.getElementById("results");
   const status = document.getElementById("status");
   if (!form || !results || !status) return;
-  let timer, ctrl;
-  const run = () => {
+  let timer, settle, ctrl;
+  // "live" requests update the results while typing and are not stored as queries.
+  // After a pause the query is sent once more as "final", so only settled queries count.
+  const run = (mode) => {
     const url = "/search?" + new URLSearchParams(new FormData(form));
     if (ctrl) ctrl.abort();
     ctrl = new AbortController();
-    fetch(url, { signal: ctrl.signal })
+    fetch(url, { signal: ctrl.signal, headers: { "X-Search": mode } })
       .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
       .then((html) => {
         const doc = new DOMParser().parseFromString(html, "text/html");
@@ -24,6 +26,8 @@
   };
   form.addEventListener("input", () => {
     clearTimeout(timer);
-    timer = setTimeout(run, 250);
+    clearTimeout(settle);
+    timer = setTimeout(() => run("live"), 250);
+    settle = setTimeout(() => run("final"), 1500);
   });
 })();

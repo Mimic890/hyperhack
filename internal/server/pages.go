@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -23,6 +24,9 @@ import (
 
 	"github.com/Mimic890/hyperhack/internal/config"
 	"github.com/Mimic890/hyperhack/internal/content"
+	"github.com/Mimic890/hyperhack/internal/ratelimit"
+	"github.com/Mimic890/hyperhack/internal/store"
+	"github.com/Mimic890/hyperhack/internal/syncer"
 )
 
 //go:embed web
@@ -50,7 +54,7 @@ type pageData struct {
 	CSS     string
 	Site    site
 
-	JS string // search.js URL; empty on pages without the script
+	JS []string // versioned script URLs for this page
 
 	// <head> metadata. Desc, Canonical and Image are absolute or empty.
 	Desc, Canonical, Image string
@@ -59,10 +63,14 @@ type pageData struct {
 	JSONLD                 template.JS // from json.Marshal
 
 	Posts       []*content.Post
+	Popular     []*content.Post
 	Page, Pages int
 	PageBase    string // pager URL for page 1; other pages add ?page=N
 
-	Post *content.Post
+	Post   *content.Post
+	Views  int64
+	Votes  store.Votes
+	MyVote int // store.Like, store.Dislike or store.None
 
 	Tag   string   // tag page, or the search filter
 	Tags  []string // all tags, for the search filter
@@ -74,18 +82,35 @@ type pageData struct {
 }
 
 type pages struct {
-	log   *slog.Logger
-	cfg   *config.Config
-	index func() *content.Index
-	tmpl  map[string]map[string]*template.Template // lang → page → template
-	css   []byte
-	cssV  string
-	js    []byte
-	jsV   string
-	fonts fs.FS
+	log       *slog.Logger // component http
+	vlog      *slog.Logger // component votes
+	mlog      *slog.Logger // component metrics
+	cfg       *config.Config
+	index     func() *content.Index
+	store     *store.Store
+	syncStats func() syncer.Stats
+	tmpl      map[string]map[string]*template.Template // lang → page → template
+	css       []byte
+	cssV      string
+	scripts   map[string]script // file name → script
+	fonts     fs.FS
+
+	origin   string // SITE_URL origin, for the Origin check
+	lim      limits
+	altcha   *altchaGuard
+	visitors *visitors
+	metrics  *registry
 }
 
-func newPages(log *slog.Logger, cfg *config.Config, index func() *content.Index) *pages {
+type script struct {
+	body []byte
+	url  string // versioned
+}
+
+type limits struct{ vote, beacon, search, reindex *ratelimit.Limiter }
+
+// newPages builds the handlers. log is the base logger; components are added here.
+func newPages(log *slog.Logger, cfg *config.Config, d Deps) *pages {
 	msgs := map[string]map[string]string{}
 	for _, l := range langs {
 		b, err := webFS.ReadFile("web/i18n/" + l + ".json")
@@ -99,7 +124,21 @@ func newPages(log *slog.Logger, cfg *config.Config, index func() *content.Index)
 		msgs[l] = m
 	}
 
-	p := &pages{log: log, cfg: cfg, index: index, tmpl: map[string]map[string]*template.Template{}}
+	p := &pages{
+		log: log.With("component", "http"), vlog: log.With("component", "votes"), mlog: log.With("component", "metrics"),
+		cfg: cfg, index: d.Index, store: d.Store, syncStats: d.SyncStats,
+		tmpl:   map[string]map[string]*template.Template{},
+		origin: cfg.SiteURL.Scheme + "://" + cfg.SiteURL.Host,
+		lim: limits{
+			vote: ratelimit.New(cfg.RateVote.N, cfg.RateVote.Per), beacon: ratelimit.New(cfg.RateBeacon.N, cfg.RateBeacon.Per),
+			search: ratelimit.New(cfg.RateSearch.N, cfg.RateSearch.Per), reindex: ratelimit.New(cfg.RateReindex.N, cfg.RateReindex.Per),
+		},
+		altcha:  newAltchaGuard(cfg.AltchaHMACKey, cfg.AltchaMaxNumber, cfg.AltchaExpires),
+		metrics: newRegistry(),
+	}
+	p.visitors = newVisitors(cfg.VisitorSecret, func(what string) {
+		p.mlog.Warn("view tracking full for today, new entries are not counted", "map", what)
+	})
 	for _, l := range langs {
 		p.tmpl[l] = map[string]*template.Template{}
 		for _, name := range []string{"home", "post", "error", "search", "tag"} {
@@ -109,16 +148,20 @@ func newPages(log *slog.Logger, cfg *config.Config, index func() *content.Index)
 		}
 	}
 
-	base, err := webFS.ReadFile("web/static/style.css")
+	css, err := webFS.ReadFile("web/static/style.css")
 	if err != nil {
 		panic(err)
 	}
-	p.css = append(append(base, tagCSS()...), themedChromaCSS()...)
+	p.css = append(append(css, tagCSS()...), themedChromaCSS()...)
 	p.cssV = versioned("/static/style.css", p.css)
-	if p.js, err = webFS.ReadFile("web/static/search.js"); err != nil {
-		panic(err)
+	p.scripts = map[string]script{}
+	for _, name := range []string{"search.js", "altcha.js", "post.js"} {
+		b, err := webFS.ReadFile("web/static/" + name)
+		if err != nil {
+			panic(err)
+		}
+		p.scripts[name] = script{body: b, url: versioned("/static/"+name, b)}
 	}
-	p.jsV = versioned("/static/search.js", p.js)
 	p.fonts, err = fs.Sub(webFS, "web/static/fonts")
 	if err != nil {
 		panic(err)
@@ -272,9 +315,12 @@ func (p *pages) render(w http.ResponseWriter, status int, name string, d pageDat
 func (p *pages) errorPage(w http.ResponseWriter, r *http.Request, status int) {
 	d := p.data(r)
 	d.Title, d.Text = "not_found", "not_found_text"
-	if status == http.StatusServiceUnavailable {
+	switch status {
+	case http.StatusServiceUnavailable:
 		d.Title, d.Text = "not_ready", "not_ready_text"
 		w.Header().Set("Retry-After", "30")
+	case http.StatusTooManyRequests: // Retry-After is set by limit
+		d.Title, d.Text = "too_many", "too_many_text"
 	}
 	p.render(w, status, "error", d)
 }
@@ -291,7 +337,22 @@ func (p *pages) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Tags = ix.Tags()
+	if d.Page == 1 {
+		d.Popular = p.popular(r.Context(), ix)
+	}
 	p.render(w, http.StatusOK, "home", d)
+}
+
+// popular is the top POPULAR_LIMIT posts by views in the last POPULAR_DAYS days (today included).
+func (p *pages) popular(ctx context.Context, ix *content.Index) []*content.Post {
+	slugs, _ := p.store.Popular(ctx, store.Day(time.Now().AddDate(0, 0, 1-p.cfg.PopularDays))) // error logged by store
+	var out []*content.Post
+	for _, s := range slugs {
+		if post := ix.Get(s); post != nil && len(out) < p.cfg.PopularLimit {
+			out = append(out, post)
+		}
+	}
+	return out
 }
 
 // tag handles /tags/{tag...}: posts with this tag, paginated.
@@ -313,15 +374,19 @@ func (p *pages) tag(w http.ResponseWriter, r *http.Request) {
 }
 
 // search handles GET /search?q=&tag=&page=. It works without JS; search.js swaps #results.
-// shortcut: no RATE_LIMIT_SEARCH yet; it comes with the rate limiter in stage 5.
+// Live requests from search.js (X-Search: live) are not stored as queries, so typing
+// "s", "se", "sel" does not fill the stats; the settled query is sent once as "final".
 func (p *pages) search(w http.ResponseWriter, r *http.Request) {
+	if p.limit(p.lim.search, "search")(w, r) {
+		return
+	}
 	ix := p.index()
 	if ix == nil {
 		p.errorPage(w, r, http.StatusServiceUnavailable)
 		return
 	}
 	d := p.data(r)
-	d.NoIndex, d.JS, d.Tags = true, p.jsV, ix.Tags()
+	d.NoIndex, d.JS, d.Tags = true, []string{p.scripts["search.js"].url}, ix.Tags()
 	q := r.URL.Query()
 	d.Query = q.Get("q")
 	if rs := []rune(d.Query); len(rs) > content.MaxQueryRunes {
@@ -336,7 +401,13 @@ func (p *pages) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	size := p.cfg.PageSize
+	start := time.Now()
 	hits, total, err := ix.Search(d.Query, d.Tag, d.Page, size)
+	p.metrics.searchDone(time.Since(start))
+	if terms := content.Terms(d.Query); err == nil && len(terms) > 0 && d.Page == 1 && r.Header.Get("X-Search") != "live" {
+		p.metrics.searchQuery(total == 0)
+		_ = p.store.LogSearch(r.Context(), store.Day(time.Now()), strings.Join(terms, " "), total == 0) // error logged by store
+	}
 	if err != nil {
 		p.log.Error("search", "err", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -382,6 +453,13 @@ func (p *pages) post(w http.ResponseWriter, r *http.Request) {
 		d.Image = p.abs(assetPath(post.Cover))
 	}
 	d.JSONLD = p.jsonLD(post, d.Canonical, d.Image)
+	d.JS = []string{p.scripts["altcha.js"].url, p.scripts["post.js"].url}
+	ctx := r.Context()
+	d.Views, _ = p.store.Views(ctx, post.Slug) // errors are logged by store; the page still renders
+	d.Votes, _ = p.store.PostVotes(ctx, post.Slug)
+	if vid := readVID(r); vid != "" {
+		d.MyVote, _ = p.store.VoteOf(ctx, vidHash(vid), post.Slug)
+	}
 	p.render(w, http.StatusOK, "post", d)
 }
 
@@ -474,10 +552,33 @@ func localPath(back string) string {
 // assetPath is the escaped URL path of a vault asset key.
 func assetPath(key string) string { return (&url.URL{Path: "/" + key}).EscapedPath() }
 
-func (p *pages) script(w http.ResponseWriter, _ *http.Request) {
+func (p *pages) script(w http.ResponseWriter, r *http.Request) {
+	s, ok := p.scripts[r.PathValue("script")]
+	if !ok {
+		p.errorPage(w, r, http.StatusNotFound)
+		return
+	}
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable") // URL carries a content hash
-	_, _ = w.Write(p.js)
+	_, _ = w.Write(s.body)
+}
+
+// limit returns a check that answers 429 with Retry-After when the client is over l.
+func (p *pages) limit(l *ratelimit.Limiter, endpoint string) func(http.ResponseWriter, *http.Request) bool {
+	return func(w http.ResponseWriter, r *http.Request) bool {
+		ok, wait := l.Allow(clientIP(r, p.cfg.TrustedProxies))
+		if ok {
+			return false
+		}
+		p.log.Warn("rate limit hit", "endpoint", endpoint) // never the client address
+		w.Header().Set("Retry-After", strconv.Itoa(ratelimit.RetryAfter(wait)))
+		if endpoint == "search" {
+			p.errorPage(w, r, http.StatusTooManyRequests)
+		} else {
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		}
+		return true
+	}
 }
 
 func (p *pages) style(w http.ResponseWriter, _ *http.Request) {
