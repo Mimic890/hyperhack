@@ -40,11 +40,11 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseDefaults(t *testing.T) {
-	p, err := NewRenderer("ru").Parse("Мой Первый Пост!.md", []byte("---\ntitle: T\ndate: 2026-11-03\ntags: go\ndraft: true\n---\n"))
+	p, err := NewRenderer("ru").Parse("Мой Первый Пост!.md", []byte("---\ntitle: T\ndate: 2026-11-03\ntags: [Go, go, Заметки, dev/go-1_2]\ndraft: true\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Slug != "moy-pervyy-post" || p.Lang != "ru" || !p.Draft || len(p.Tags) != 1 || p.Tags[0] != "go" {
+	if p.Slug != "moy-pervyy-post" || p.Lang != "ru" || !p.Draft || strings.Join(p.Tags, ",") != "go,заметки,dev/go-1_2" || len(p.Source) == 0 {
 		t.Errorf("got %+v", p)
 	}
 }
@@ -65,6 +65,10 @@ func TestParseErrors(t *testing.T) {
 		"cover wikilink": "---\ntitle: T\ndate: 2026-11-03\ncover: \"[[x.png]]\"\n---\n",
 		"cover ext":      "---\ntitle: T\ndate: 2026-11-03\ncover: assets/x.html\n---\n",
 		"bad draft":      "---\ntitle: T\ndate: 2026-11-03\ndraft: maybe\n---\n",
+		"tag space":      "---\ntitle: T\ndate: 2026-11-03\ntags: [a b]\n---\n",
+		"tag html":       "---\ntitle: T\ndate: 2026-11-03\ntags: ['<x>']\n---\n",
+		"tag long":       "---\ntitle: T\ndate: 2026-11-03\ntags: [" + strings.Repeat("x", 51) + "]\n---\n",
+		"too many tags":  "---\ntitle: T\ndate: 2026-11-03\ntags: [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u]\n---\n",
 		"huge":           "---\ntitle: T\n" + strings.Repeat("x: y\n", maxFrontmatter/5+1) + "---\n",
 	}
 	r := NewRenderer("en")
@@ -96,6 +100,12 @@ func TestSlugify(t *testing.T) {
 
 func TestRender(t *testing.T) {
 	r := NewRenderer("en")
+	r.ImageSize = func(key string) (int, int) {
+		if key == "assets/a b.png" {
+			return 640, 360
+		}
+		return 0, 0
+	}
 	src := "# Привет мир\n\n## Привет мир\n\n```go\nfunc main() {}\n```\n\n" +
 		"[ext](https://example.com) [int](/posts/x) [file](assets/doc.png) <https://example.org>\n\n" +
 		"![alt](assets/a%20b.png)\n"
@@ -112,7 +122,7 @@ func TestRender(t *testing.T) {
 		`<a href="/posts/x">int</a>`,
 		`<a href="/assets/doc.png">file</a>`,
 		`<a href="https://example.org" rel="noopener noreferrer">`,
-		`<img src="/assets/a%20b.png" alt="alt">`,
+		`<img src="/assets/a%20b.png" alt="alt" width="640" height="360" loading="lazy" decoding="async">`,
 	} {
 		if !strings.Contains(string(got), want) {
 			t.Errorf("missing %s in\n%s", want, got)
