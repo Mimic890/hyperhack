@@ -49,11 +49,15 @@ func run() int {
 		mainLog.Error("S3 client", "err", err)
 		return 1
 	}
-	syn := syncer.New(bucket, mir, content.NewRenderer(cfg.DefaultLang), syncer.Options{
+	render := content.NewRenderer(cfg.DefaultLang)
+	render.ImageSize = mir.ImageSize
+	syn := syncer.New(bucket, mir, render, syncer.Options{
 		PollInterval:  cfg.PollInterval,
 		MaxPostBytes:  cfg.MaxPostBytes,
 		MaxAssetBytes: cfg.MaxAssetBytes,
 		MaxObjects:    cfg.MaxObjects,
+		SiteURL:       cfg.SiteURL,
+		IndexNowKey:   cfg.IndexNowKey,
 	}, log)
 
 	var ready atomic.Bool

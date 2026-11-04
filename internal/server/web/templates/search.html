@@ -1,0 +1,19 @@
+{{define "title"}}{{with .Query}}{{.}} — {{end}}{{t "search"}} — {{.Site.Name}}{{end}}
+{{define "main"}}
+<h1 class="section-title">{{t "search"}}</h1>
+{{template "searchform" .}}
+<p id="status" class="meta" role="status">{{if .Query}}{{t "found" "n" .Total}}{{end}}</p>
+<section id="results" aria-label="{{t "results"}}">
+  {{- range .Hits}}
+  <article class="card">
+    <h2><a href="/posts/{{.Post.Slug}}">{{.Post.Title}}</a></h2>
+    <p class="meta">{{template "date" .Post.Date}}</p>
+    {{- if .Snippet}}<p class="desc snippet">{{.Snippet}}</p>{{else}}{{with .Post.Description}}<p class="desc">{{.}}</p>{{end}}{{end}}
+    {{- template "tags" .Post.Tags}}
+  </article>
+  {{- else}}{{if .Query}}
+  <p class="empty">{{t "no_results"}}</p>
+  {{- end}}{{end}}
+  {{- template "pager" .}}
+</section>
+{{end}}

@@ -1,10 +1,17 @@
 package syncer
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -254,4 +261,85 @@ func TestSyncConcurrent(t *testing.T) {
 	if b.gets != 1 {
 		t.Errorf("gets = %d, want 1", b.gets)
 	}
+}
+
+func TestIndexNow(t *testing.T) {
+	got := make(chan map[string]any, 4)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/json; charset=utf-8" ||
+			json.NewDecoder(r.Body).Decode(&body) != nil {
+			t.Errorf("bad request: %s %s", r.Method, r.Header.Get("Content-Type"))
+		}
+		got <- body
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer ts.Close()
+
+	b := &fakeBucket{objs: map[string]fakeObj{"a.md": {"e1", post("A", "a")}, "b.md": {"e1", post("B", "b")}}}
+	s := newSyncer(t, t.TempDir(), b)
+	s.opts.SiteURL, _ = url.Parse("https://example.com")
+	s.opts.IndexNowKey = "key12345"
+	s.indexNowURL = ts.URL
+	ctx := context.Background()
+	if err := s.Sync(ctx); err != nil { // first load: no ping
+		t.Fatal(err)
+	}
+	b.set("a.md", "e2", post("A v2", "a"))
+	b.set("c.md", "e1", post("C", "c"))
+	delete(b.objs, "b.md")
+	b.set("assets/x.png", "e1", "png") // asset only: re-render, no ping for unchanged posts
+	if err := s.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case body := <-got:
+		var urls []string
+		for _, u := range body["urlList"].([]any) {
+			urls = append(urls, u.(string))
+		}
+		slices.Sort(urls)
+		want := []string{"https://example.com/posts/a", "https://example.com/posts/b", "https://example.com/posts/c"}
+		if !slices.Equal(urls, want) || body["host"] != "example.com" || body["key"] != "key12345" ||
+			body["keyLocation"] != "https://example.com/key12345.txt" {
+			t.Errorf("body = %v", body)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no ping")
+	}
+	b.set("assets/x.png", "e2", "png2")
+	if err := s.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case body := <-got:
+		t.Errorf("ping for an asset-only change: %v", body)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestAssetChangeRerenders(t *testing.T) {
+	b := &fakeBucket{objs: map[string]fakeObj{"a.md": {"e1", "---\ntitle: A\ndate: 2026-11-03\n---\n![x](assets/x.png)\n"}}}
+	s := newSyncer(t, t.TempDir(), b)
+	s.render.ImageSize = s.mirror.ImageSize
+	ctx := context.Background()
+	if err := s.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(s.Index().Get("a").HTML), "width=") {
+		t.Fatal("width before the image exists")
+	}
+	var buf bytes.Buffer
+	_ = pngEncode(&buf, 3, 2)
+	b.set("assets/x.png", "e1", buf.String())
+	if err := s.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if h := string(s.Index().Get("a").HTML); !strings.Contains(h, `width="3" height="2"`) {
+		t.Errorf("not re-rendered after the asset appeared: %s", h)
+	}
+}
+
+func pngEncode(w io.Writer, width, height int) error {
+	return png.Encode(w, image.NewGray(image.Rect(0, 0, width, height)))
 }

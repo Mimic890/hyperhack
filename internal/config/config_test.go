@@ -30,6 +30,14 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if c.AuthorName != "Example" || c.DefaultOGImage != "" || c.IndexNowKey != "" {
+		t.Errorf("author %q, og %q, indexnow %q", c.AuthorName, c.DefaultOGImage, c.IndexNowKey)
+	}
+	env := validEnv()
+	env["AUTHOR_NAME"], env["DEFAULT_OG_IMAGE"], env["INDEXNOW_KEY"] = "Jane", "/assets/og.png", "abcdef0123456789"
+	if c2, err := load(env); err != nil || c2.AuthorName != "Jane" || c2.DefaultOGImage != "assets/og.png" || c2.IndexNowKey != "abcdef0123456789" {
+		t.Errorf("custom = %+v, %v", c2, err)
+	}
 	if c.SiteURL.String() != "https://example.com" {
 		t.Errorf("SiteURL = %s", c.SiteURL)
 	}
@@ -52,19 +60,21 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadErrors(t *testing.T) {
 	cases := map[string]string{
-		"SITE_NAME":       "",
-		"SITE_URL":        "ftp://example.com",
-		"S3_ENDPOINT":     "http://s3.example.com",
-		"REINDEX_TOKEN":   "short",
-		"ALTCHA_HMAC_KEY": "",
-		"DEFAULT_LANG":    "de",
-		"LOG_LEVEL":       "loud",
-		"LOG_FORMAT":      "xml",
-		"POLL_INTERVAL":   "1s",
-		"PAGE_SIZE":       "0",
-		"RATE_LIMIT_VOTE": "10",
-		"METRICS_ALLOW":   "10.0.0.0/33",
-		"GITHUB_URL":      "javascript:alert(1)",
+		"SITE_NAME":        "",
+		"SITE_URL":         "ftp://example.com",
+		"S3_ENDPOINT":      "http://s3.example.com",
+		"REINDEX_TOKEN":    "short",
+		"ALTCHA_HMAC_KEY":  "",
+		"DEFAULT_LANG":     "de",
+		"LOG_LEVEL":        "loud",
+		"LOG_FORMAT":       "xml",
+		"POLL_INTERVAL":    "1s",
+		"PAGE_SIZE":        "0",
+		"RATE_LIMIT_VOTE":  "10",
+		"METRICS_ALLOW":    "10.0.0.0/33",
+		"GITHUB_URL":       "javascript:alert(1)",
+		"DEFAULT_OG_IMAGE": "../etc/og.png",
+		"INDEXNOW_KEY":     "short",
 	}
 	for name, val := range cases {
 		t.Run(name, func(t *testing.T) {

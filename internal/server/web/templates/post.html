@@ -1,17 +1,20 @@
 {{define "title"}}{{.Post.Title}} — {{.Site.Name}}{{end}}
 {{define "main"}}
+{{- with .Post}}
 <article class="post">
   <header>
-    <h1>{{.Post.Title}}</h1>
-    <p class="meta">{{template "date" .Post.Date}}
-      {{- if not .Post.Updated.IsZero}} · {{t "updated" "date" (date .Post.Updated)}}{{end}}
-      · {{t "min_read" "n" (minutes .Post.Words)}}</p>
+    <h1>{{.Title}}</h1>
+    <p class="meta">{{template "date" .Date}}
+      {{- if not .Updated.IsZero}} · {{t "updated" "date" (date .Updated)}}{{end}}
+      · {{t "min_read" "n" (minutes .Words)}}</p>
+    {{- template "tags" .Tags}}
   </header>
-  {{- with .Post.Cover}}
-  <img class="cover" src="{{asset .}}" alt="">
+  {{- if .Cover}}
+  <img class="cover" src="{{asset .Cover}}" alt=""{{if .CoverW}} width="{{.CoverW}}" height="{{.CoverH}}"{{end}}>
   {{- end}}
   <div class="prose">
-{{.Post.HTML}}
+{{.HTML}}
   </div>
 </article>
+{{- end}}
 {{end}}

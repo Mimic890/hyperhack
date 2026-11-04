@@ -21,9 +21,21 @@ func New(log *slog.Logger, cfg *config.Config, ready *atomic.Bool, sync func(con
 	p := newPages(log, cfg, index)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", p.home)
-	mux.HandleFunc("GET /posts/{slug}", p.post)
+	mux.HandleFunc("GET /posts/{slug}", p.post) // also /posts/<slug>.md
+	mux.HandleFunc("GET /tags/{tag...}", p.tag)
+	mux.HandleFunc("GET /search", p.search)
+	mux.HandleFunc("GET /rss.xml", p.rss)
+	mux.HandleFunc("GET /sitemap.xml", p.sitemap)
+	mux.HandleFunc("GET /robots.txt", p.robots)
+	mux.HandleFunc("GET /llms.txt", p.llms)
+	if key := cfg.IndexNowKey; key != "" { // the config allows only [a-zA-Z0-9-]
+		mux.HandleFunc("GET /"+key+".txt", func(w http.ResponseWriter, _ *http.Request) {
+			writeText(w, "text/plain; charset=utf-8", key)
+		})
+	}
 	mux.HandleFunc("POST /prefs", p.prefs)
 	mux.HandleFunc("GET /static/style.css", p.style)
+	mux.HandleFunc("GET /static/search.js", p.script)
 	mux.HandleFunc("GET /static/fonts/{file}", p.font)
 	mux.HandleFunc("GET /", p.notFound)
 	mux.Handle("POST /reindex", reindex(log, cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies, sync))

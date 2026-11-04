@@ -8,10 +8,12 @@ import (
 	"html/template"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/net/html"
 
 	"github.com/Mimic890/hyperhack/internal/mirror"
 )
@@ -24,12 +26,16 @@ type Post struct {
 	Description string
 	Date        time.Time
 	Updated     time.Time // zero if not set
-	Tags        []string
-	Cover       string // key inside assets/, empty if not set
+	Tags        []string  // lower case, unique
+	Cover       string    // key inside assets/, empty if not set
+	CoverW      int       // cover size in pixels, 0 if unknown
+	CoverH      int
 	Lang        string
 	Draft       bool
 	Words       int           // body word count, for reading time
 	HTML        template.HTML // sanitized
+	Text        string        // plain text of HTML, for search
+	Source      []byte        // the raw .md file, served at /posts/<slug>.md
 }
 
 const maxFrontmatter = 64 << 10
@@ -37,6 +43,8 @@ const maxFrontmatter = 64 << 10
 var (
 	slugRe = regexp.MustCompile(`^[a-z0-9-]{1,100}$`)
 	langRe = regexp.MustCompile(`^[a-z]{2}$`)
+	// Obsidian tag characters: letters, digits, - _ /.
+	tagRe = regexp.MustCompile(`^[\p{L}\p{N}_/-]{1,50}$`)
 )
 
 type frontmatter struct {
@@ -98,10 +106,8 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 			return nil, fmt.Errorf("updated: %w", err)
 		}
 	}
-	for _, t := range f.Tags {
-		if t = strings.TrimSpace(t); t != "" {
-			p.Tags = append(p.Tags, t)
-		}
+	if p.Tags, err = cleanTags(f.Tags); err != nil {
+		return nil, err
 	}
 	if f.Cover != "" {
 		c := strings.TrimPrefix(f.Cover, "/")
@@ -109,6 +115,9 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 			return nil, errors.New("cover must be a file inside assets/")
 		}
 		p.Cover = c
+		if r.ImageSize != nil {
+			p.CoverW, p.CoverH = r.ImageSize(c)
+		}
 	}
 	if f.Lang != "" {
 		if !langRe.MatchString(f.Lang) {
@@ -132,8 +141,52 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 	if p.HTML, err = r.render(body); err != nil {
 		return nil, fmt.Errorf("render: %w", err)
 	}
+	p.Text = plainText(string(p.HTML))
+	p.Source = src
 	return p, nil
 }
+
+const maxTags = 20
+
+// cleanTags lowercases tags and drops duplicates. A tag outside the Obsidian rules is an error.
+func cleanTags(in []string) ([]string, error) {
+	var out []string
+	for _, t := range in {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t == "" || slices.Contains(out, t) {
+			continue
+		}
+		if !tagRe.MatchString(t) {
+			return nil, fmt.Errorf("tag %q: use 1-50 letters, digits, - _ or /", t)
+		}
+		out = append(out, t)
+	}
+	if len(out) > maxTags {
+		return nil, fmt.Errorf("more than %d tags", maxTags)
+	}
+	return out, nil
+}
+
+// plainText returns the text nodes of s, separated by spaces.
+func plainText(s string) string {
+	var b strings.Builder
+	z := html.NewTokenizer(strings.NewReader(s))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			return strings.Join(strings.Fields(b.String()), " ")
+		case html.TextToken:
+			b.Write(z.Text())
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
+			if name, _ := z.TagName(); !inlineTags[string(name)] {
+				b.WriteByte(' ') // block boundary: keep words apart
+			}
+		}
+	}
+}
+
+// inlineTags do not split words: "<b>x</b>." stays "x.".
+var inlineTags = map[string]bool{"a": true, "b": true, "code": true, "del": true, "em": true, "i": true, "mark": true, "s": true, "span": true, "strong": true, "sub": true, "sup": true}
 
 // splitFrontmatter cuts the YAML block between the leading "---" lines.
 func splitFrontmatter(src []byte) (fm, body []byte, err error) {

@@ -23,11 +23,14 @@ type Renderer struct {
 	md          goldmark.Markdown
 	policy      *bluemonday.Policy
 	defaultLang string
+	// ImageSize returns the pixel size of an assets/ key, or 0, 0. Nil means unknown.
+	ImageSize func(key string) (w, h int)
 }
 
 // NewRenderer builds the Markdown pipeline. defaultLang is used for posts without lang.
 func NewRenderer(defaultLang string) *Renderer {
-	md := goldmark.New(
+	r := &Renderer{defaultLang: defaultLang}
+	r.md = goldmark.New(
 		// No goldmark.WithUnsafe: raw HTML and dangerous URLs are dropped.
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -35,14 +38,18 @@ func NewRenderer(defaultLang string) *Renderer {
 		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
-			parser.WithASTTransformers(util.Prioritized(linkTransformer{}, 100)),
+			parser.WithASTTransformers(util.Prioritized(linkTransformer{r}, 100)),
 		),
 	)
 	p := bluemonday.UGCPolicy()
 	p.RequireNoFollowOnLinks(false)
 	p.AllowAttrs("rel").Matching(regexp.MustCompile(`^noopener noreferrer$`)).OnElements("a")
 	p.AllowAttrs("class").Matching(regexp.MustCompile(`^[a-z0-9 -]+$`)).OnElements("pre", "code", "span")
-	return &Renderer{md: md, policy: p, defaultLang: defaultLang}
+	p.AllowAttrs("width", "height").Matching(regexp.MustCompile(`^[0-9]{1,6}$`)).OnElements("img")
+	p.AllowAttrs("loading").Matching(regexp.MustCompile(`^lazy$`)).OnElements("img")
+	p.AllowAttrs("decoding").Matching(regexp.MustCompile(`^async$`)).OnElements("img")
+	r.policy = p
+	return r
 }
 
 func (r *Renderer) render(src []byte) (template.HTML, error) {
@@ -54,16 +61,26 @@ func (r *Renderer) render(src []byte) (template.HTML, error) {
 	return template.HTML(r.policy.SanitizeBytes(buf.Bytes())), nil // safe: sanitized above
 }
 
-// linkTransformer maps "assets/…" to "/assets/…" and marks external links.
-type linkTransformer struct{}
+// linkTransformer maps "assets/…" to "/assets/…", marks external links and sizes images.
+type linkTransformer struct{ r *Renderer }
 
-func (linkTransformer) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
+func (t linkTransformer) Transform(doc *ast.Document, _ text.Reader, _ parser.Context) {
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
 		switch n := n.(type) {
 		case *ast.Image:
+			if t.r.ImageSize != nil && bytes.HasPrefix(n.Destination, []byte("assets/")) {
+				if key, err := url.PathUnescape(string(n.Destination)); err == nil {
+					if w, h := t.r.ImageSize(key); w > 0 {
+						n.SetAttributeString("width", []byte(strconv.Itoa(w)))
+						n.SetAttributeString("height", []byte(strconv.Itoa(h)))
+					}
+				}
+			}
+			n.SetAttributeString("loading", []byte("lazy"))
+			n.SetAttributeString("decoding", []byte("async"))
 			n.Destination = assetPath(n.Destination)
 		case *ast.Link:
 			n.Destination = assetPath(n.Destination)

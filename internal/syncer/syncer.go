@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +25,8 @@ type Options struct {
 	MaxPostBytes  int64
 	MaxAssetBytes int64
 	MaxObjects    int
+	SiteURL       *url.URL
+	IndexNowKey   string // empty: no IndexNow pings
 }
 
 // Syncer runs one sync at a time; Sync calls wait for the running one.
@@ -35,6 +38,8 @@ type Syncer struct {
 	log    *slog.Logger // component sync
 	rlog   *slog.Logger // component render
 	retry  []time.Duration
+
+	indexNowURL string
 
 	mu        sync.Mutex
 	cache     map[string]cached // post key → last parse result
@@ -52,11 +57,13 @@ type cached struct {
 func New(b Bucket, m *mirror.Mirror, r *content.Renderer, opts Options, log *slog.Logger) *Syncer {
 	return &Syncer{
 		bucket: b, mirror: m, render: r, opts: opts,
-		log:    log.With("component", "sync"),
-		rlog:   log.With("component", "render"),
-		retry:  []time.Duration{5 * time.Second, 30 * time.Second},
-		cache:  map[string]cached{},
-		warned: map[string]string{},
+		log:   log.With("component", "sync"),
+		rlog:  log.With("component", "render"),
+		retry: []time.Duration{5 * time.Second, 30 * time.Second},
+
+		indexNowURL: indexNowURL,
+		cache:       map[string]cached{},
+		warned:      map[string]string{},
 	}
 }
 
@@ -135,6 +142,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	}
 	keep := map[string]bool{}
 	var added, updated, removed, failed int
+	assets := false // an image changed: posts must re-render for new width/height
 	for _, o := range objs {
 		if ctx.Err() != nil {
 			break
@@ -166,6 +174,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 			continue
 		}
 		s.log.Debug("fetched", "key", o.Key, "etag", o.ETag)
+		assets = assets || kind == mirror.Asset
 		if existed {
 			updated++
 		} else {
@@ -184,6 +193,9 @@ func (s *Syncer) Sync(ctx context.Context) error {
 				continue
 			}
 			s.log.Debug("removed", "key", key)
+			if k, _ := mirror.Classify(key); k == mirror.Asset {
+				assets = true
+			}
 			removed++
 		}
 	}
@@ -194,8 +206,18 @@ func (s *Syncer) Sync(ctx context.Context) error {
 			return fmt.Errorf("save mirror state: %w", err)
 		}
 	}
-	if changed || s.index.Load() == nil {
+	old := s.index.Load()
+	if assets {
+		clear(s.cache)
+	}
+	if changed || old == nil {
 		s.rebuild()
+	}
+	// No ping without an old index: the first load is not a change.
+	if changed && old != nil && s.opts.IndexNowKey != "" {
+		if urls := s.changedURLs(old, s.Index()); len(urls) > 0 {
+			go s.indexNow(urls)
+		}
 	}
 	level := slog.LevelDebug
 	if changed || failed > 0 {
