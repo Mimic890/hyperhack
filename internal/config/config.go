@@ -7,9 +7,12 @@ import (
 	"log/slog"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Mimic890/hyperhack/internal/mirror"
 )
 
 // Rate is a request limit: N requests per Per.
@@ -21,6 +24,7 @@ type Rate struct {
 // Config holds all settings. Secrets are never logged; use Summary for logs.
 type Config struct {
 	SiteName    string
+	AuthorName  string
 	SiteURL     *url.URL
 	DefaultLang string
 	GitHubURL   string
@@ -72,6 +76,8 @@ type Config struct {
 
 const minSecretLen = 32
 
+var indexNowKeyRe = regexp.MustCompile(`^[a-zA-Z0-9-]{8,128}$`)
+
 // privateRanges is the default for METRICS_ALLOW and REINDEX_ALLOW: loopback and private ranges.
 const privateRanges = "127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
 
@@ -81,6 +87,7 @@ func Load(getenv func(string) string) (*Config, error) {
 	l := loader{getenv: getenv}
 	c := &Config{
 		SiteName:    l.required("SITE_NAME"),
+		AuthorName:  l.str("AUTHOR_NAME", strings.TrimSpace(getenv("SITE_NAME"))),
 		SiteURL:     l.url("SITE_URL", true, "http", "https"),
 		DefaultLang: l.enum("DEFAULT_LANG", "en", "en", "ru"),
 		GitHubURL:   l.optionalURL("GITHUB_URL"),
@@ -118,8 +125,8 @@ func Load(getenv func(string) string) (*Config, error) {
 		PageSize:     l.int("PAGE_SIZE", 10, 1, 100),
 		RSSLimit:     l.int("RSS_LIMIT", 20, 1, 1000),
 
-		DefaultOGImage: l.str("DEFAULT_OG_IMAGE", ""),
-		IndexNowKey:    l.str("INDEXNOW_KEY", ""),
+		DefaultOGImage: l.asset("DEFAULT_OG_IMAGE"),
+		IndexNowKey:    l.match("INDEXNOW_KEY", indexNowKeyRe, "8–128 characters a-z, A-Z, 0-9 or -"),
 
 		MetricsAllow:   l.prefixes("METRICS_ALLOW", privateRanges),
 		ReindexAllow:   l.prefixes("REINDEX_ALLOW", privateRanges),
@@ -246,6 +253,28 @@ func (l *loader) url(name string, required bool, schemes ...string) *url.URL {
 	}
 	l.fail(name, "scheme must be %s", strings.Join(schemes, " or "))
 	return nil
+}
+
+// asset reads an optional key inside assets/ (same rule as a post cover).
+func (l *loader) asset(name string) string {
+	v := strings.TrimPrefix(l.str(name, ""), "/")
+	if v == "" {
+		return ""
+	}
+	if k, err := mirror.Classify(v); err != nil || k != mirror.Asset {
+		l.fail(name, "must be a file inside assets/ with an allowed extension")
+		return ""
+	}
+	return v
+}
+
+func (l *loader) match(name string, re *regexp.Regexp, rule string) string {
+	v := l.str(name, "")
+	if v != "" && !re.MatchString(v) {
+		l.fail(name, "must be %s", rule)
+		return ""
+	}
+	return v
 }
 
 func (l *loader) optionalURL(name string) string {
