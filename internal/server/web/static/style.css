@@ -1,0 +1,171 @@
+/* Inter and JetBrains Mono: SIL Open Font License 1.1, see fonts/OFL-*.txt. */
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(fonts/inter-latin-wght-normal.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(fonts/inter-cyrillic-wght-normal.woff2) format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "Inter"; font-style: italic; font-weight: 100 900; font-display: swap;
+  src: url(fonts/inter-latin-wght-italic.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter"; font-style: italic; font-weight: 100 900; font-display: swap;
+  src: url(fonts/inter-cyrillic-wght-italic.woff2) format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url(fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono"; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url(fonts/jetbrains-mono-cyrillic-wght-normal.woff2) format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+/* Theme tokens. Light by default; dark from the system unless the cookie says light. */
+:root {
+  --bg: #ffffff;
+  --surface: #f6f7f9;
+  --text: #1c2026;
+  --muted: #5a636e;
+  --border: #e3e6ea;
+  --accent: #0b5fcc;
+  --accent-soft: #e8f0fc;
+  --focus: #0b5fcc;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216;
+    --surface: #171b21;
+    --text: #e4e7eb;
+    --muted: #9aa3ae;
+    --border: #2a3038;
+    --accent: #79b4ff;
+    --accent-soft: #1a2636;
+    --focus: #79b4ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216;
+  --surface: #171b21;
+  --text: #e4e7eb;
+  --muted: #9aa3ae;
+  --border: #2a3038;
+  --accent: #79b4ff;
+  --accent-soft: #1a2636;
+  --focus: #79b4ff;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 1.0625rem/1.7 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+img { max-width: 100%; height: auto; }
+
+.skip { position: absolute; left: -9999px; top: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg); z-index: 10; }
+.skip:focus { left: 0.5rem; }
+
+/* Top bar: brand left, empty center, tools right. */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  max-width: 64rem; margin: 0 auto; padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: inline-flex; align-items: center; gap: 0.6rem; color: var(--text); text-decoration: none; font-weight: 650; font-size: 1.125rem; letter-spacing: -0.01em; }
+.brand:hover span { text-decoration: underline; text-underline-offset: 0.2em; }
+.logo { display: block; flex: none; border-radius: 8px; }
+svg.logo { color: var(--text); }
+svg.logo path { stroke: var(--bg); }
+.tools, .prefs, .langs { display: flex; align-items: center; gap: 0.25rem; }
+.prefs { margin: 0; }
+.langs { margin: 0 0.25rem; padding: 2px; border: 1px solid var(--border); border-radius: 999px; }
+.tools button, .tools .icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2.25rem; height: 2.25rem; padding: 0 0.5rem;
+  border: 0; border-radius: 999px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; text-decoration: none;
+}
+.langs button { height: 1.875rem; min-width: 2.5rem; }
+.tools button:hover, .tools .icon:hover { color: var(--text); background: var(--surface); }
+.langs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+
+/* One theme button is shown: the one that switches away from the current theme. */
+.to-light { display: none !important; }
+:root[data-theme="dark"] .to-light { display: inline-flex !important; }
+:root[data-theme="dark"] .to-dark { display: none !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .to-light { display: inline-flex !important; }
+  :root:not([data-theme="light"]) .to-dark { display: none !important; }
+}
+
+main { max-width: 44rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+
+/* Main page */
+.section-title { margin: 0 0 1.25rem; font-size: 0.8125rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.card { padding: 1.25rem 0; border-top: 1px solid var(--border); }
+.card:first-of-type { border-top: 0; padding-top: 0; }
+.card h2 { margin: 0; font-size: 1.375rem; line-height: 1.3; font-weight: 650; letter-spacing: -0.015em; }
+.card h2 a { color: var(--text); text-decoration: none; }
+.card h2 a:hover { color: var(--accent); }
+.meta { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.desc { margin: 0.5rem 0 0; }
+.empty { color: var(--muted); }
+.pager { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+.pager a { text-decoration: none; font-weight: 600; }
+.pager [rel="next"] { justify-self: end; }
+
+/* Post page */
+.post > header h1 { margin: 0; font-size: clamp(1.875rem, 4vw + 1rem, 2.625rem); line-height: 1.15; font-weight: 700; letter-spacing: -0.025em; }
+.post > header .meta { margin-top: 0.75rem; }
+.cover { display: block; width: 100%; margin: 2rem 0 0; border-radius: 12px; }
+.prose { margin-top: 2rem; overflow-wrap: break-word; }
+.prose > :first-child { margin-top: 0; }
+.prose h2, .prose h3, .prose h4 { line-height: 1.3; letter-spacing: -0.015em; margin: 2.25rem 0 0.75rem; scroll-margin-top: 1rem; }
+.prose h2 { font-size: 1.5rem; font-weight: 650; }
+.prose h3 { font-size: 1.25rem; font-weight: 650; }
+.prose h4 { font-size: 1.0625rem; font-weight: 650; }
+.prose p, .prose ul, .prose ol, .prose blockquote, .prose table, .prose pre { margin: 0 0 1.25rem; }
+.prose li + li { margin-top: 0.35rem; }
+.prose blockquote { padding: 0.25rem 0 0.25rem 1rem; border-left: 3px solid var(--border); color: var(--muted); }
+.prose blockquote > :last-child { margin-bottom: 0; }
+.prose hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+.prose img { display: block; margin: 1.5rem auto; border-radius: 8px; }
+.prose table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 0.9375rem; }
+.prose th, .prose td { padding: 0.5rem 0.75rem; border: 1px solid var(--border); text-align: left; }
+.prose th { background: var(--surface); font-weight: 600; }
+code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-ligatures: none; tab-size: 4; }
+.prose :not(pre) > code { padding: 0.1em 0.35em; border-radius: 4px; background: var(--surface); font-size: 0.875em; }
+.prose pre { overflow-x: auto; padding: 1rem 1.125rem; border: 1px solid var(--border); border-radius: 10px; font-size: 0.875rem; line-height: 1.6; }
+.prose pre, .prose pre.chroma { background: var(--surface); }
+
+.error h1 { margin: 0 0 0.75rem; font-size: 2rem; letter-spacing: -0.02em; }
+
+@media (max-width: 30rem) {
+  .topbar { padding: 0.75rem 1rem; }
+  main { padding: 1.75rem 1rem 3rem; }
+  .brand span { font-size: 1rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
+/* Code highlighting (chroma) is appended below at startup. */

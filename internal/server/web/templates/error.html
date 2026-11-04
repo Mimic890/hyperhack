@@ -1,0 +1,8 @@
+{{define "title"}}{{t .Title}} — {{.Site.Name}}{{end}}
+{{define "main"}}
+<section class="error">
+  <h1>{{t .Title}}</h1>
+  <p>{{t .Text}}</p>
+  <p><a href="/">{{t "back_home"}}</a></p>
+</section>
+{{end}}

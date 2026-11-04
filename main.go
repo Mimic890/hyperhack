@@ -60,7 +60,7 @@ func run() int {
 	httpLog := log.With("component", "http")
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(httpLog, cfg, &ready, syn.Sync),
+		Handler:           server.New(httpLog, cfg, &ready, syn.Sync, syn.Index),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,

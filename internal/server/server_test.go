@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/Mimic890/hyperhack/internal/config"
+	"github.com/Mimic890/hyperhack/internal/content"
 )
 
 func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
@@ -19,7 +19,7 @@ func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
 
 func TestRoutes(t *testing.T) {
 	var ready atomic.Bool
-	h := New(slog.New(slog.DiscardHandler), &config.Config{}, &ready, nil)
+	h := New(slog.New(slog.DiscardHandler), testConfig(), &ready, nil, func() *content.Index { return nil })
 
 	if got := do(h, "GET", "/healthz").Code; got != http.StatusServiceUnavailable {
 		t.Errorf("healthz before ready = %d, want 503", got)
@@ -29,8 +29,10 @@ func TestRoutes(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Body.String() != "ok\n" {
 		t.Errorf("healthz = %d %q", rec.Code, rec.Body)
 	}
-	if got := do(h, "POST", "/healthz").Code; got != http.StatusMethodNotAllowed {
-		t.Errorf("POST /healthz = %d, want 405", got)
+	for _, r := range []struct{ method, path string }{{"POST", "/healthz"}, {"GET", "/prefs"}, {"PUT", "/reindex"}, {"POST", "/posts/x"}, {"DELETE", "/"}} {
+		if got := do(h, r.method, r.path).Code; got != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s = %d, want 405", r.method, r.path, got)
+		}
 	}
 	rec = do(h, "GET", "/nope")
 	if rec.Code != http.StatusNotFound {

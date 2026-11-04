@@ -12,12 +12,28 @@ import (
 	"time"
 
 	"github.com/Mimic890/hyperhack/internal/config"
+	"github.com/Mimic890/hyperhack/internal/content"
 )
 
-// New returns the root handler. ready gates /healthz; sync runs a bucket sync for /reindex.
-func New(log *slog.Logger, cfg *config.Config, ready *atomic.Bool, sync func(context.Context) error) http.Handler {
+// New returns the root handler. ready gates /healthz; sync runs a bucket sync for /reindex;
+// index returns the current posts (nil before the first load).
+func New(log *slog.Logger, cfg *config.Config, ready *atomic.Bool, sync func(context.Context) error, index func() *content.Index) http.Handler {
+	p := newPages(log, cfg, index)
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", p.home)
+	mux.HandleFunc("GET /posts/{slug}", p.post)
+	mux.HandleFunc("POST /prefs", p.prefs)
+	mux.HandleFunc("GET /static/style.css", p.style)
+	mux.HandleFunc("GET /static/fonts/{file}", p.font)
+	mux.HandleFunc("GET /", p.notFound)
 	mux.Handle("POST /reindex", reindex(log, cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies, sync))
+	// The "GET /" catch-all would answer GET on POST-only paths with 404; SPEC wants 405.
+	for _, path := range []string{"/reindex", "/prefs"} {
+		mux.HandleFunc("GET "+path, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		})
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if !ready.Load() {
