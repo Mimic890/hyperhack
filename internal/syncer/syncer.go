@@ -15,6 +15,9 @@ import (
 
 const fetchTimeout = 5 * time.Minute
 
+// LogoKey is the optional site logo; Caddy serves it as /assets/logo.svg.
+const LogoKey = "assets/logo.svg"
+
 // Options holds the limits from the config.
 type Options struct {
 	PollInterval  time.Duration
@@ -231,7 +234,9 @@ func (s *Syncer) rebuild() {
 		}
 	}
 	s.cache = next
-	s.index.Store(content.NewIndex(posts, s.rlog))
+	ix := content.NewIndex(posts, s.rlog)
+	_, ix.Logo = s.mirror.State()[LogoKey]
+	s.index.Store(ix)
 }
 
 func (s *Syncer) parse(key string) *content.Post {
