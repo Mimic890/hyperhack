@@ -120,7 +120,7 @@ Proposed variables (final names set during implementation):
 ## Bucket layout
 
 - `assets/` — all assets: covers, images in posts. Decided.
-- `assets/logo.svg` — optional site logo in the top bar. Without it the service shows a built-in mark.
+- `assets/logo.svg` — optional site logo in the top bar and favicon. Without it the service shows a built-in mark.
 - The service ignores keys where any path segment starts with `.` or `_` (same rule as Remotely Save).
 
 ### Posts
@@ -421,6 +421,7 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 | `/metrics` | GET | private network | Caddy block, `METRICS_ALLOW` |
 | `/healthz` | GET | public | constant body, no data |
 | `/prefs` | POST | public | form body ≤ 4 KB, enum check for `theme` / `lang`, redirect only to a local path |
+| `/favicon.ico` | GET | public | built-in SVG mark, or `302` to `/assets/logo.svg` when the bucket has a logo; never `404` |
 | `/static/*` | GET | public | embedded CSS, JS and fonts only, no directory listing |
 | `/<INDEXNOW_KEY>.txt` | GET | public | only if `INDEXNOW_KEY` is set; body is the key |
 
@@ -618,3 +619,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-04 — Grafana, Caddy, README: dashboard `grafana/hyperhack.json` for a Prometheus-type data source on VictoriaMetrics (uses the VictoriaMetrics function `sort_by_label_numeric`); daily bars cover the day that starts at the bar, so today is shown. `Caddyfile.example` for Caddy `v2.11.7` with `caddy-ratelimit` `v0.1.0` (1200 requests per minute per client IP; `/static/*` and `/assets/*` are not counted) and `caddy-crowdsec-bouncer` `v0.14.1`; `/metrics` and `/reindex` (and their subpaths) answer `404` on the public domain; compression `zstd`/`gzip`. README: behind Caddy on the host, `TRUSTED_PROXIES` is the gateway of the Compose network. Full README in English and Russian.
 - 2026-11-04 — Production Compose: image registry GHCR (confirmed). `docker-compose.yml` only pulls the released image, no `build:`, pinned to the latest release (`0.1.0`; image tags are the git tag without `v`). Local builds in `compose.dev.yml`, used only with `-f`; no `docker-compose.override.yml`. README Quick start uses the downloaded `docker-compose.yml` as is, and README documents upgrades and rollback.
 - 2026-11-04 — Post cover as a full-width banner between the top bar and the text column: height `min(30vh, 320px)` (`min(25vh, 200px)` on screens up to 30rem), `object-fit: cover` centered, no rounded corners, `width`/`height` kept. Rendered from a `banner` block in the layout, outside `<main>`. Posts without cover unchanged.
+- 2026-11-04 — Favicon: every page has `<link rel="icon" type="image/svg+xml">` pointing to `/assets/logo.svg` when the bucket has it, else to `/favicon.ico`. `GET /favicon.ico` serves the built-in mark as SVG (accent background, white mark, fixed colors), or answers `302` to `/assets/logo.svg` when the logo exists; `Cache-Control: max-age=3600`, since the logo can change with any sync. Never `404`.

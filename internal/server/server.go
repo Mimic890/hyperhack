@@ -39,6 +39,7 @@ func New(log *slog.Logger, cfg *config.Config, d Deps) http.Handler {
 	mux.HandleFunc("GET /sitemap.xml", p.sitemap)
 	mux.HandleFunc("GET /robots.txt", p.robots)
 	mux.HandleFunc("GET /llms.txt", p.llms)
+	mux.HandleFunc("GET /favicon.ico", p.favicon)
 	if key := cfg.IndexNowKey; key != "" { // the config allows only [a-zA-Z0-9-]
 		mux.HandleFunc("GET /"+key+".txt", func(w http.ResponseWriter, _ *http.Request) {
 			writeText(w, "text/plain; charset=utf-8", key)

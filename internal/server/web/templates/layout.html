@@ -33,6 +33,7 @@
 {{- with .JSONLD}}
 <script type="application/ld+json">{{.}}</script>
 {{- end}}
+<link rel="icon" type="image/svg+xml" href="{{if .Site.Logo}}/assets/logo.svg{{else}}/favicon.ico{{end}}">
 <link rel="stylesheet" href="{{.CSS}}">
 {{- range .JS}}
 <script src="{{.}}" defer></script>
