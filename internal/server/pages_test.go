@@ -274,3 +274,23 @@ func TestStatic(t *testing.T) {
 		}
 	}
 }
+
+func TestFavicon(t *testing.T) {
+	ix := testIndex(1)
+	s := newSite(t, testConfig(), ix)
+	mustContain(t, s.get("/").Body.String(), `<link rel="icon" type="image/svg+xml" href="/favicon.ico">`)
+	for _, idx := range []*content.Index{ix, nil} { // nil: still starting, no index yet
+		s.idx.Store(idx)
+		rec := s.get("/favicon.ico")
+		if rec.Code != 200 || rec.Header().Get("Content-Type") != "image/svg+xml" || !strings.HasPrefix(rec.Body.String(), "<svg") {
+			t.Errorf("built-in favicon = %d %q", rec.Code, rec.Header().Get("Content-Type"))
+		}
+	}
+
+	ix.Logo = true
+	s.idx.Store(ix)
+	mustContain(t, s.get("/").Body.String(), `<link rel="icon" type="image/svg+xml" href="/assets/logo.svg">`)
+	if rec := s.get("/favicon.ico"); rec.Code != http.StatusFound || rec.Header().Get("Location") != "/assets/logo.svg" {
+		t.Errorf("favicon with logo = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}

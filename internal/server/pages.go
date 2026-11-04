@@ -92,6 +92,7 @@ type pages struct {
 	tmpl      map[string]map[string]*template.Template // lang → page → template
 	css       []byte
 	cssV      string
+	mark      []byte            // built-in mark, for /favicon.ico
 	scripts   map[string]script // file name → script
 	fonts     fs.FS
 
@@ -161,6 +162,9 @@ func newPages(log *slog.Logger, cfg *config.Config, d Deps) *pages {
 			panic(err)
 		}
 		p.scripts[name] = script{body: b, url: versioned("/static/"+name, b)}
+	}
+	if p.mark, err = webFS.ReadFile("web/static/favicon.svg"); err != nil {
+		panic(err)
 	}
 	p.fonts, err = fs.Sub(webFS, "web/static/fonts")
 	if err != nil {
@@ -585,6 +589,17 @@ func (p *pages) style(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable") // URL carries a content hash
 	_, _ = w.Write(p.css)
+}
+
+// favicon never answers 404: it redirects to the bucket logo when there is one, else serves the built-in mark.
+func (p *pages) favicon(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=3600") // the logo can appear or go with any sync
+	if ix := p.index(); ix != nil && ix.Logo {
+		http.Redirect(w, r, "/assets/logo.svg", http.StatusFound)
+		return
+	}
+	w.Header().Set("Content-Type", "image/svg+xml")
+	_, _ = w.Write(p.mark)
 }
 
 func (p *pages) font(w http.ResponseWriter, r *http.Request) {
