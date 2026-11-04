@@ -1,4 +1,7 @@
 {{define "title"}}{{.Post.Title}} — {{.Site.Name}}{{end}}
+{{define "banner"}}{{with .Post}}{{if .Cover}}
+<img class="cover" src="{{asset .Cover}}" alt=""{{if .CoverW}} width="{{.CoverW}}" height="{{.CoverH}}"{{end}}>
+{{- end}}{{end}}{{end}}
 {{define "main"}}
 {{- $d := .}}
 {{- with .Post}}
@@ -10,9 +13,6 @@
       · {{t "min_read" "n" (minutes .Words)}} · {{t "views" "n" $d.Views}}</p>
     {{- template "tags" .Tags}}
   </header>
-  {{- if .Cover}}
-  <img class="cover" src="{{asset .Cover}}" alt=""{{if .CoverW}} width="{{.CoverW}}" height="{{.CoverH}}"{{end}}>
-  {{- end}}
   <div class="prose">
 {{.HTML}}
     <span class="depth d25" data-depth="25" aria-hidden="true"></span><span class="depth d50" data-depth="50" aria-hidden="true"></span><span class="depth d75" data-depth="75" aria-hidden="true"></span><span class="depth d100" data-depth="100" aria-hidden="true"></span>
