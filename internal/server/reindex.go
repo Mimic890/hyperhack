@@ -14,14 +14,16 @@ import (
 // reindexWriteTimeout replaces the server WriteTimeout: a sync can take longer than 30 s.
 const reindexWriteTimeout = 10 * time.Minute
 
-// reindex handles POST /reindex: private network only, Bearer token, waits for the sync.
-// shortcut: no RATE_LIMIT_REINDEX yet; it comes with the rate limiter in stage 5.
-func reindex(log *slog.Logger, token string, allow, trusted []netip.Prefix, sync func(context.Context) error) http.HandlerFunc {
+// reindex handles POST /reindex: private network only, RATE_LIMIT_REINDEX, Bearer token, waits for the sync.
+func reindex(log *slog.Logger, token string, allow, trusted []netip.Prefix, limited func(http.ResponseWriter, *http.Request) bool, sync func(context.Context) error) http.HandlerFunc {
 	want := sha256.Sum256([]byte(token))
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !contains(allow, clientIP(r, trusted)) {
 			log.Warn("reindex denied", "reason", "address not in REINDEX_ALLOW")
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
+		if limited(w, r) { // before the token check: limits guessing
 			return
 		}
 		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")

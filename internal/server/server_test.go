@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
-	"sync/atomic"
 	"testing"
 
 	"github.com/Mimic890/hyperhack/internal/content"
@@ -20,8 +19,10 @@ func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
 }
 
 func TestRoutes(t *testing.T) {
-	var ready atomic.Bool
-	h := New(slog.New(slog.DiscardHandler), testConfig(), &ready, nil, func() *content.Index { return nil })
+	d := testDeps(t, func() *content.Index { return nil })
+	ready := d.Ready
+	ready.Store(false)
+	h := New(slog.New(slog.DiscardHandler), testConfig(), d)
 
 	if got := do(h, "GET", "/healthz").Code; got != http.StatusServiceUnavailable {
 		t.Errorf("healthz before ready = %d, want 503", got)
@@ -48,7 +49,7 @@ func TestRoutes(t *testing.T) {
 }
 
 func TestPanicRecovery(t *testing.T) {
-	h := middleware(slog.New(slog.DiscardHandler), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := middleware(slog.New(slog.DiscardHandler), newRegistry(), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("secret internal detail")
 	}))
 	rec := do(h, "GET", "/")
@@ -61,7 +62,7 @@ func TestPanicRecovery(t *testing.T) {
 // TestCSPMatchesSpec keeps the CSP header identical to SPEC → Security headers.
 func TestCSPMatchesSpec(t *testing.T) {
 	re := regexp.MustCompile("`Content-Security-Policy: (default-src 'self'[^`]*)`")
-	h := New(slog.New(slog.DiscardHandler), testConfig(), new(atomic.Bool), nil, func() *content.Index { return nil })
+	h := New(slog.New(slog.DiscardHandler), testConfig(), testDeps(t, func() *content.Index { return nil }))
 	got := do(h, "GET", "/healthz").Header().Get("Content-Security-Policy")
 	for _, f := range []string{"../../SPEC.md", "../../SPEC.ru.md"} {
 		b, err := os.ReadFile(f)
