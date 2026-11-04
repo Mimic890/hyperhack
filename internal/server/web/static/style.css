@@ -157,7 +157,8 @@ main { max-width: 44rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
 /* Post page */
 .post > header h1 { margin: 0; font-size: clamp(1.875rem, 4vw + 1rem, 2.625rem); line-height: 1.15; font-weight: 700; letter-spacing: -0.025em; }
 .post > header .meta { margin-top: 0.75rem; }
-.cover { display: block; width: 100%; margin: 2rem 0 0; border-radius: 12px; }
+/* Banner between the top bar and main, full page width. The fixed height keeps the page from jumping. */
+.cover { display: block; width: 100%; height: min(30vh, 320px); object-fit: cover; object-position: center; background: var(--surface); }
 .prose { position: relative; margin-top: 2rem; overflow-wrap: break-word; }
 /* Read-depth markers for the post script (IntersectionObserver). */
 .depth { position: absolute; left: 0; width: 1px; height: 1px; pointer-events: none; }
@@ -204,6 +205,7 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 @media (max-width: 30rem) {
   .topbar { padding: 0.75rem 1rem; }
   main { padding: 1.75rem 1rem 3rem; }
+  .cover { height: min(25vh, 200px); }
   .brand span { font-size: 1rem; }
   .search input { flex-basis: 100%; }
   .search select { flex: 1; max-width: none; }

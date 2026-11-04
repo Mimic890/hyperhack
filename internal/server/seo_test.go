@@ -65,8 +65,17 @@ func TestPostHead(t *testing.T) {
 		t.Errorf("JSON-LD = %v", ld)
 	}
 
-	// No cover: DEFAULT_OG_IMAGE.
-	mustContain(t, s.get("/posts/zametka").Body.String(), `<meta property="og:image" content="https://example.com/assets/og.png">`, `<html lang="ru"`)
+	// The cover is a banner between the top bar and main, outside the text column.
+	if c, h, m := strings.Index(body, `class="cover"`), strings.Index(body, "</header>"), strings.Index(body, `<main id="main">`); !(h < c && c < m) {
+		t.Errorf("cover at %d, want between top bar (%d) and main (%d)", c, h, m)
+	}
+
+	// No cover: DEFAULT_OG_IMAGE, no banner.
+	plain := s.get("/posts/zametka").Body.String()
+	mustContain(t, plain, `<meta property="og:image" content="https://example.com/assets/og.png">`, `<html lang="ru"`)
+	if strings.Contains(plain, `class="cover"`) {
+		t.Error("banner on a post without cover")
+	}
 }
 
 func TestMarkdownSource(t *testing.T) {
