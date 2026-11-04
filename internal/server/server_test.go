@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"regexp"
 	"sync/atomic"
 	"testing"
 
@@ -53,5 +55,25 @@ func TestPanicRecovery(t *testing.T) {
 	body, _ := io.ReadAll(rec.Body)
 	if rec.Code != http.StatusInternalServerError || string(body) != "Internal Server Error\n" {
 		t.Errorf("got %d %q", rec.Code, body)
+	}
+}
+
+// TestCSPMatchesSpec keeps the CSP header identical to SPEC → Security headers.
+func TestCSPMatchesSpec(t *testing.T) {
+	re := regexp.MustCompile("`Content-Security-Policy: (default-src 'self'[^`]*)`")
+	h := New(slog.New(slog.DiscardHandler), testConfig(), new(atomic.Bool), nil, func() *content.Index { return nil })
+	got := do(h, "GET", "/healthz").Header().Get("Content-Security-Policy")
+	for _, f := range []string{"../../SPEC.md", "../../SPEC.ru.md"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := re.FindAllSubmatch(b, -1)
+		if len(m) != 1 {
+			t.Fatalf("%s: want one service CSP, found %d", f, len(m))
+		}
+		if want := string(m[0][1]); got != want {
+			t.Errorf("CSP differs from %s:\ngot  %s\nwant %s", f, got, want)
+		}
 	}
 }
