@@ -1,0 +1,66 @@
+# Caddyfile for hyperhack. Copy it, replace example.com and /srv/hyperhack.
+#
+# Needs Caddy built with two plugins (README → Caddy):
+#   xcaddy build v2.11.7 \
+#     --with github.com/mholt/caddy-ratelimit@v0.1.0 \
+#     --with github.com/hslatman/caddy-crowdsec-bouncer/http@v0.14.1
+#
+# CROWDSEC_API_URL and CROWDSEC_API_KEY come from Caddy's environment.
+# The CrowdSec LAPI also defaults to port 8080: move one of them if both run on the host.
+{
+	order crowdsec first
+	order rate_limit after crowdsec
+	crowdsec {
+		api_url {$CROWDSEC_API_URL}
+		api_key {$CROWDSEC_API_KEY}
+	}
+}
+
+example.com {
+	crowdsec
+
+	# Per client IP. Static files and assets are not counted.
+	@limited not path /static/* /assets/*
+	rate_limit @limited {
+		zone per_client {
+			key {remote_host}
+			events 1200
+			window 1m
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	encode zstd gzip
+
+	# Private endpoints. VictoriaMetrics and /reindex callers reach the service directly.
+	# A handle block, because handle runs before a bare respond.
+	@private path /metrics /metrics/* /reindex /reindex/*
+	handle @private {
+		respond 404
+	}
+
+	# Assets straight from the mirror (vault/assets/), allowed extensions only.
+	handle /assets/* {
+		@allowed path *.png *.jpg *.jpeg *.webp *.avif *.gif *.svg *.mp4 *.webm
+		handle @allowed {
+			root * /srv/hyperhack/vault
+			header {
+				X-Content-Type-Options nosniff
+				Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+			}
+			file_server
+		}
+		respond 404
+	}
+
+	handle {
+		request_body /api/* {
+			max_size 16KB
+		}
+		reverse_proxy 127.0.0.1:8080
+	}
+}
