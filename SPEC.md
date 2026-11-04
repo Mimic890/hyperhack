@@ -82,6 +82,7 @@ Proposed variables (final names set during implementation):
 | Variable | Purpose |
 |---|---|
 | `SITE_NAME`, `SITE_URL` | Site name and public URL. |
+| `AUTHOR_NAME` | Optional. Author in JSON-LD and RSS. Default: `SITE_NAME`. |
 | `DEFAULT_LANG` | UI language and default post language: `en` or `ru`. Default `en`. |
 | `GITHUB_URL` | Link in the top bar. |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Bucket access. `S3_ENDPOINT` must be `https://`. `S3_REGION` default: `garage`. |
@@ -96,8 +97,8 @@ Proposed variables (final names set during implementation):
 | `POPULAR_DAYS`, `POPULAR_LIMIT` | "Popular" window and size. Defaults: `30`, `5`. |
 | `PAGE_SIZE` | Posts per page in "Newest" and tag pages. Default: `10`. |
 | `RSS_LIMIT` | Posts in the RSS feed. Default: `20`. |
-| `DEFAULT_OG_IMAGE` | Preview image for posts without `cover`. |
-| `INDEXNOW_KEY` | Optional. Enables IndexNow pings. |
+| `DEFAULT_OG_IMAGE` | Optional. Preview image for pages and posts without `cover`: a file inside `assets/`, same rules as `cover`. |
+| `INDEXNOW_KEY` | Optional. Enables IndexNow pings. 8–128 characters `a-z A-Z 0-9 -`. Served at `/<INDEXNOW_KEY>.txt`. |
 | `RATE_LIMIT_SEARCH` | Search limit per client. Default: `30/1m`. |
 | `VISITOR_SECRET` | HMAC key for the daily visitor hash, ≥ 32 bytes. |
 | `ALTCHA_EXPIRES`, `ALTCHA_MAX_NUMBER` | Challenge lifetime and difficulty. Defaults: `5m`, `100000`. |
@@ -189,6 +190,7 @@ Rules:
 - No `title` or `date`, or invalid YAML → post skipped, WARN log.
 - Invalid `date`, `updated`, `slug`, `lang` (not two lower-case letters), `cover` (not an allowed file in `assets/`) or `draft` → post skipped, WARN log.
 - Slug from the file name: lower case, Russian letters transliterated (`ж` → `zh`, `х` → `kh`, `щ` → `shch`, `ъ` and `ь` dropped), any other character run → `-`. Heading anchors use the same rule.
+- `tags`: lower-cased (`Go` → `go`), duplicates merged. Letters of any script, digits, `-`, `_`, `/`; 1–50 characters each; at most 20 per post. Anything else → post skipped, WARN log.
 - Two posts with one `slug` → the first by object key wins, the second is skipped, ERROR log.
 - Unknown fields are ignored. Obsidian can add its own.
 - README describes every field in this table.
@@ -288,6 +290,7 @@ Goal: the best search possible without an extra service.
 - Result snippets with highlighted matches.
 - Works without JS: `GET /search?q=…` renders results. With JS: results update while typing.
 - Filter by tag.
+- The results page has `noindex`.
 
 Rejected: Meilisearch and similar. Better typo handling, but a separate service.
 
@@ -417,7 +420,8 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 | `/metrics` | GET | private network | Caddy block, `METRICS_ALLOW` |
 | `/healthz` | GET | public | constant body, no data |
 | `/prefs` | POST | public | form body ≤ 4 KB, enum check for `theme` / `lang`, redirect only to a local path |
-| `/static/*` | GET | public | embedded CSS and fonts only, no directory listing |
+| `/static/*` | GET | public | embedded CSS, JS and fonts only, no directory listing |
+| `/<INDEXNOW_KEY>.txt` | GET | public | only if `INDEXNOW_KEY` is set; body is the key |
 
 Other methods → `405`. Unknown paths → `404`.
 
@@ -610,3 +614,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-03 — Config defaults: `POLL_INTERVAL` 60s, `READING_WPM` 200, `LOG_LEVEL` info, `LOG_FORMAT` json, `DATA_DIR` /data, `VAULT_DIR` /vault, `ALTCHA_MAX_NUMBER` 100000, `S3_REGION` garage. Log component `main`. The service listens on fixed port 8080.
 - 2026-11-03 — Sync: S3 client `minio-go/v7`, frontmatter via `go.yaml.in/yaml/v3`, GFM. Mirror state in `VAULT_DIR/.hyperhack.json`. S3 down at startup: serve from the mirror; exit 1 only with no mirror. No Remotely Save prefix. Keys with a `.` or `_` segment are ignored (was proposed). `MAX_OBJECTS` counts all keys. An invalid frontmatter field skips the post. 3 S3 attempts per poll. `/reindex` waits for the sync and returns `204`.
 - 2026-11-04 — Pages: theme and language switch via a no-JS form `POST /prefs`; cookies `theme` / `lang` (`HttpOnly; SameSite=Lax; Max-Age=1 year`, `Secure` on https). Logo from `assets/logo.svg`, built-in mark otherwise. Fonts Inter + JetBrains Mono, self-hosted. Pagination `/?page=N`: page 1 is `/`, other out-of-range values → `404`. `<html lang>` from the post; the top bar keeps the UI language. CSS and fonts at `/static/*`.
+- 2026-11-04 — Search, tags, RSS, SEO: Bleve `v2.6.1`, in-memory index, one document mapping per language (`en`, `ru`). Fuzziness by word length: ≤ 3 letters 0, ≤ 6 letters 1, longer 2; prefix on the last word. Snippets keep only `<mark>`. Search works without JS; `search.js` swaps the results while typing (debounced). Results page `noindex`. Tags lower case, Obsidian characters, `/tags/<tag>` paginated like the main page. 24 tag hue buckets (FNV-1a hash), contrast checked in tests. RSS: `dc:creator` from `AUTHOR_NAME`, `atom:updated` from `updated`. Image `width`/`height` read from the mirror (`golang.org/x/image` for WebP); an asset change re-renders all posts. IndexNow: one ping per sync with new, changed and removed post URLs, not on the first index load. New `AUTHOR_NAME`; `DEFAULT_OG_IMAGE` is a path inside `assets/`.
