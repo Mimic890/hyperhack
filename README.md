@@ -166,7 +166,7 @@ Post text…
 | `date` | date | yes | Publish date. "Newest" is sorted by it. |
 | `updated` | date | no | Last update. Shown on the post and in RSS. |
 | `tags` | list | no | Tags. A single string also works. |
-| `cover` | string | no | Cover image, a file inside `assets/`. |
+| `cover` | string | no | Cover image, a file inside `assets/`. Shown as a full-width banner above the title, cropped to a wide strip around the center: keep the subject in the middle. |
 | `slug` | string | no | URL part. Default: made from the file name. |
 | `lang` | string | no | Post language, two lower-case letters (`en`, `ru`). Default: `DEFAULT_LANG`. |
 | `draft` | bool | no | `true` keeps the post unpublished. Default `false`. |
