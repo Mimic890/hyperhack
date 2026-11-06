@@ -89,8 +89,5 @@
 {{- end}}{{end}}
 {{define "searchform"}}<form id="search" class="search" role="search" action="/search" method="get">
   <input type="search" name="q" value="{{.Query}}" maxlength="200" placeholder="{{t "search_placeholder"}}" aria-label="{{t "search"}}">
-  {{- with .Tags}}
-  <select name="tag" aria-label="{{t "tag_filter"}}"><option value="">{{t "all_tags"}}</option>{{range .}}<option value="{{.}}"{{if eq . $.Tag}} selected{{end}}>#{{.}}</option>{{end}}</select>
-  {{- end}}
   <button type="submit">{{t "search"}}</button>
 </form>{{end}}

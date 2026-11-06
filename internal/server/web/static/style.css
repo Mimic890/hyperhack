@@ -202,15 +202,17 @@ main > .home { max-width: none; }
 
 /* Search */
 .search { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 2rem; }
-.search input, .search select, .search button {
+.search input, .search button {
   height: 44px; padding: 0 0.875rem; border: 1px solid var(--line); border-radius: 12px;
   background: var(--raise); color: var(--text); font: inherit; font-size: 0.9375rem;
 }
 .search input { flex: 1 1 14rem; min-width: 0; }
-.search select { flex: 0 1 auto; max-width: 12rem; }
 .search button { background: var(--uv-soft); font-weight: 600; cursor: pointer; }
 #status { margin: -1rem 0 1.25rem; }
-.snippet mark { background: var(--uv-soft); color: inherit; border-radius: 3px; padding: 0 0.1em; }
+/* These margins drop the centering of main > *. */
+main > .section-title, main > .search, main > #status { margin-inline: auto; }
+.snippet mark { background: var(--uv-soft); color: var(--text); border-radius: 3px; padding: 0 0.1em; }
+.hit-title mark { background: none; color: var(--uv); text-decoration: underline; text-underline-offset: 0.18em; }
 
 /* Post page */
 main > .post { max-width: none; }
@@ -375,7 +377,6 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 }
 @media (max-width: 30rem) {
   .search input { flex-basis: 100%; }
-  .search select { flex: 1; max-width: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }

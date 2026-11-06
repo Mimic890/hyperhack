@@ -6,13 +6,13 @@
 <section id="results" aria-label="{{t "results"}}">
   {{- range .Hits}}
   <article class="card">
-    <h2><a href="/posts/{{.Post.Slug}}">{{.Post.Title}}</a></h2>
+    <h2 class="hit-title"><a href="/posts/{{.Post.Slug}}">{{with .Title}}{{.}}{{else}}{{.Post.Title}}{{end}}</a></h2>
     <p class="meta">{{template "date" .Post.Date}}</p>
     {{- if .Snippet}}<p class="desc snippet">{{.Snippet}}</p>{{else}}{{with .Post.Description}}<p class="desc">{{.}}</p>{{end}}{{end}}
     {{- template "tags" .Post.Tags}}
   </article>
   {{- else}}{{if .Query}}
-  <p class="empty">{{t "no_results"}}</p>
+  <p class="empty">{{t "no_results" "q" .Query}}</p>
   {{- end}}{{end}}
   {{- template "pager" .}}
 </section>

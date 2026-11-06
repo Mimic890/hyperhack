@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"log/slog"
+	"net/http"
 	"regexp"
 	"strings"
 	"testing"
@@ -214,4 +215,47 @@ func TestSitemapRobotsLLMs(t *testing.T) {
 	if rec := s.get("/other.txt"); rec.Code != 404 {
 		t.Errorf("other.txt = %d", rec.Code)
 	}
+}
+
+func TestSearchTags(t *testing.T) {
+	s := seoSite(t)
+	t.Run("tag in the query", func(t *testing.T) {
+		body := s.get("/search?q=%23go+%D0%BF%D0%BE%D1%81%D1%82%D0%BE%D0%B2").Body.String()
+		mustContain(t, body, `href="/posts/zametka"`, `value="#go постов"`, "Found: 1")
+		if strings.Contains(body, `href="/posts/go-script-tips"`) {
+			t.Error("post without the word")
+		}
+	})
+	t.Run("tags only list by date", func(t *testing.T) {
+		body := s.get("/search?q=%23go").Body.String()
+		mustContain(t, body, "Found: 2", `href="/search?page=2&amp;q=%23go"`, `href="/posts/zametka"`)
+		mustContain(t, s.get("/search?q=%23go&page=2").Body.String(), `href="/posts/go-script-tips"`)
+	})
+	t.Run("several tags mean AND", func(t *testing.T) {
+		mustContain(t, s.get("/search?q=%23go+%23dev/tools").Body.String(), "Found: 1", `href="/posts/go-script-tips"`)
+		mustContain(t, s.get("/search?q=%23dev/tools+%23заметки").Body.String(), "Found: 0")
+	})
+	t.Run("old tag links", func(t *testing.T) {
+		body := s.get("/search?tag=go").Body.String()
+		mustContain(t, body, `value="#go"`, "Found: 2", `href="/search?page=2&amp;q=%23go"`)
+		mustContain(t, s.get("/search?q=много&tag=заметки").Body.String(), `value="#заметки много"`)
+		// An unknown tag stays out of the query.
+		mustContain(t, s.get(`/search?q=go&tag="><b>`).Body.String(), `value="go"`)
+	})
+	t.Run("no results", func(t *testing.T) {
+		body := s.get(`/search?q=zzzz+"><script>alert(1)</script>`).Body.String()
+		mustContain(t, body, "Nothing found for “zzzz &#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;”. Check the word or remove #tag from the query.")
+		if strings.Contains(body, "<script>alert") {
+			t.Error("query not escaped")
+		}
+		mustContain(t, s.get("/search?q=zzzz", &http.Cookie{Name: "lang", Value: "ru"}).Body.String(), "Ничего не нашлось по «zzzz». Проверь слово или убери #тег из запроса.")
+	})
+	t.Run("title match is marked", func(t *testing.T) {
+		mustContain(t, s.get("/search?q=tips").Body.String(), `<h2 class="hit-title"><a href="/posts/go-script-tips">Go &amp; &lt;/script&gt; <mark>tips</mark></a></h2>`)
+	})
+	t.Run("no tag dropdown", func(t *testing.T) {
+		if body := s.get("/search?q=go").Body.String(); strings.Contains(body, "<select") || strings.Contains(body, `name="tag"`) {
+			t.Error("tag dropdown on the search page")
+		}
+	})
 }

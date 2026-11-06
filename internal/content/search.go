@@ -1,7 +1,9 @@
 package content
 
 import (
+	stdhtml "html"
 	"html/template"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -81,18 +83,35 @@ func newSearchIndex(posts []*Post) (bleve.Index, error) {
 // Hit is one search result.
 type Hit struct {
 	Post    *Post
+	Title   template.HTML // escaped title with <mark> around matches; empty: use Post.Title
 	Snippet template.HTML // escaped text with <mark> around matches
 }
 
 var snippetPolicy = bluemonday.NewPolicy().AllowElements("mark")
 
-// Terms splits a query into lower-case words: at most MaxQueryRunes runes and maxTerms terms.
-func Terms(q string) []string {
+// ParseQuery splits a query into lower-case words and #tag tokens: at most MaxQueryRunes
+// runes and maxTerms in total. A token with invalid tag syntax is dropped.
+func ParseQuery(q string) (terms, tags []string) {
 	if utf8.RuneCountInString(q) > MaxQueryRunes {
 		q = string([]rune(q)[:MaxQueryRunes])
 	}
-	terms := strings.FieldsFunc(strings.ToLower(q), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-	return terms[:min(len(terms), maxTerms)]
+	for _, tok := range strings.Fields(strings.ToLower(q)) {
+		if tag, ok := strings.CutPrefix(tok, "#"); ok {
+			if tagRe.MatchString(tag) && !slices.Contains(tags, tag) && len(terms)+len(tags) < maxTerms {
+				tags = append(tags, tag)
+			}
+			continue
+		}
+		words := strings.FieldsFunc(tok, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+		terms = append(terms, words[:min(len(words), maxTerms-len(terms)-len(tags))]...)
+	}
+	return terms, tags
+}
+
+// Terms returns the words of a query, without its #tag tokens.
+func Terms(q string) []string {
+	terms, _ := ParseQuery(q)
+	return terms
 }
 
 // fuzziness allows more typos in longer words, never more than 2.
@@ -109,7 +128,7 @@ func fuzziness(term string) int {
 
 // buildQuery makes match + fuzzy (+ prefix for the last term) queries in code.
 // User input never reaches Bleve's query-string syntax, so no regex or wildcard queries.
-func buildQuery(terms []string, tag string) query.Query {
+func buildQuery(terms, tags []string) query.Query {
 	var all []query.Query
 	for i, t := range terms {
 		var anyOf []query.Query
@@ -131,7 +150,7 @@ func buildQuery(terms []string, tag string) query.Query {
 		}
 		all = append(all, bleve.NewDisjunctionQuery(anyOf...))
 	}
-	if tag != "" {
+	for _, tag := range tags {
 		tq := bleve.NewTermQuery(tag)
 		tq.SetField("tag")
 		all = append(all, tq)
@@ -139,15 +158,19 @@ func buildQuery(terms []string, tag string) query.Query {
 	return bleve.NewConjunctionQuery(all...)
 }
 
-// Search finds posts for q, optionally only with tag. page starts at 1.
-func (ix *Index) Search(q, tag string, page, size int) (hits []Hit, total int, err error) {
-	terms := Terms(q)
-	if len(terms) == 0 || page < 1 || page > MaxSearchPage {
+// Search finds posts for q. Tag tokens in q filter, several mean AND; a query of tags
+// only lists their posts by date. page starts at 1.
+func (ix *Index) Search(q string, page, size int) (hits []Hit, total int, err error) {
+	terms, tags := ParseQuery(q)
+	if len(terms)+len(tags) == 0 || page < 1 || page > MaxSearchPage {
 		return nil, 0, nil
 	}
-	req := bleve.NewSearchRequestOptions(buildQuery(terms, tag), size, (page-1)*size, false)
+	if len(terms) == 0 {
+		return ix.taggedPosts(tags, page, size)
+	}
+	req := bleve.NewSearchRequestOptions(buildQuery(terms, tags), size, (page-1)*size, false)
 	req.Highlight = bleve.NewHighlightWithStyle("html")
-	req.Highlight.Fields = []string{"body", "description"}
+	req.Highlight.Fields = []string{"title", "body", "description"}
 	res, err := ix.search.Search(req)
 	if err != nil {
 		return nil, 0, err
@@ -157,8 +180,8 @@ func (ix *Index) Search(q, tag string, page, size int) (hits []Hit, total int, e
 		if p == nil {
 			continue
 		}
-		hit := Hit{Post: p}
-		for _, f := range req.Highlight.Fields {
+		hit := Hit{Post: p, Title: markedTitle(h.Fragments["title"], p.Title)}
+		for _, f := range req.Highlight.Fields[1:] {
 			if fr := h.Fragments[f]; len(fr) > 0 {
 				hit.Snippet = template.HTML(snippetPolicy.Sanitize(fr[0])) // safe: only <mark> survives
 				break
@@ -167,4 +190,29 @@ func (ix *Index) Search(q, tag string, page, size int) (hits []Hit, total int, e
 		hits = append(hits, hit)
 	}
 	return hits, int(res.Total), nil
+}
+
+// markedTitle returns the title with its matches marked. The highlighter cuts a long
+// title to a fragment; such a title is shown plain, whole.
+func markedTitle(fragments []string, title string) template.HTML {
+	if len(fragments) == 0 {
+		return ""
+	}
+	marked := snippetPolicy.Sanitize(fragments[0])
+	if stdhtml.UnescapeString(strings.NewReplacer("<mark>", "", "</mark>", "").Replace(marked)) != title {
+		return ""
+	}
+	return template.HTML(marked) // safe: only <mark> survives
+}
+
+// taggedPosts lists the posts that have all the tags, newest first.
+func (ix *Index) taggedPosts(tags []string, page, size int) ([]Hit, int, error) {
+	var hits []Hit
+	for _, p := range ix.byTag[tags[0]] {
+		if !slices.ContainsFunc(tags[1:], func(t string) bool { return !slices.Contains(p.Tags, t) }) {
+			hits = append(hits, Hit{Post: p})
+		}
+	}
+	start := min((page-1)*size, len(hits))
+	return hits[start:min(start+size, len(hits))], len(hits), nil
 }

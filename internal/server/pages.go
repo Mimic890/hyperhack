@@ -76,8 +76,7 @@ type pageData struct {
 	Votes  store.Votes
 	MyVote int // store.Like, store.Dislike or store.None
 
-	Tag   string   // tag page, or the search filter
-	Tags  []string // all tags, for the search filter
+	Tag   string // tag page
 	Query string
 	Hits  []content.Hit
 	Total int
@@ -482,6 +481,7 @@ func (p *pages) tag(w http.ResponseWriter, r *http.Request) {
 }
 
 // search handles GET /search?q=&tag=&page=. It works without JS; search.js swaps #results.
+// tag is for old links: it becomes a #tag token in the query.
 // Live requests from search.js (X-Search: live) are not stored as queries, so typing
 // "s", "se", "sel" does not fill the stats; the settled query is sent once as "final".
 func (p *pages) search(w http.ResponseWriter, r *http.Request) {
@@ -494,14 +494,14 @@ func (p *pages) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := p.data(r)
-	d.NoIndex, d.JS, d.Tags = true, []string{p.scripts["search.js"].url}, ix.Tags()
+	d.NoIndex, d.JS = true, []string{p.scripts["search.js"].url}
 	q := r.URL.Query()
 	d.Query = q.Get("q")
+	if t := q.Get("tag"); slices.Contains(ix.Tags(), t) {
+		d.Query = strings.TrimSpace("#" + t + " " + d.Query)
+	}
 	if rs := []rune(d.Query); len(rs) > content.MaxQueryRunes {
 		d.Query = string(rs[:content.MaxQueryRunes])
-	}
-	if t := q.Get("tag"); slices.Contains(d.Tags, t) {
-		d.Tag = t
 	}
 	var ok bool
 	if d.Page, ok = pageParam(r, content.MaxSearchPage); !ok {
@@ -510,7 +510,7 @@ func (p *pages) search(w http.ResponseWriter, r *http.Request) {
 	}
 	size := p.cfg.PageSize
 	start := time.Now()
-	hits, total, err := ix.Search(d.Query, d.Tag, d.Page, size)
+	hits, total, err := ix.Search(d.Query, d.Page, size)
 	p.metrics.searchDone(time.Since(start))
 	if terms := content.Terms(d.Query); err == nil && len(terms) > 0 && d.Page == 1 && r.Header.Get("X-Search") != "live" {
 		p.metrics.searchQuery(total == 0)
@@ -527,11 +527,7 @@ func (p *pages) search(w http.ResponseWriter, r *http.Request) {
 		p.errorPage(w, r, http.StatusNotFound)
 		return
 	}
-	v := url.Values{"q": {d.Query}}
-	if d.Tag != "" {
-		v.Set("tag", d.Tag)
-	}
-	d.PageBase = "/search?" + v.Encode()
+	d.PageBase = "/search?" + url.Values{"q": {d.Query}}.Encode()
 	p.render(w, http.StatusOK, "search", d)
 }
 
@@ -562,7 +558,7 @@ func (p *pages) post(w http.ResponseWriter, r *http.Request) {
 		d.Image = p.abs(assetPath(post.Cover))
 	}
 	d.JSONLD = p.jsonLD(post, d.Canonical, d.Image)
-	d.JS = []string{p.scripts["altcha.js"].url, p.scripts["post.js"].url}
+	d.JS = append(d.JS, p.scripts["altcha.js"].url, p.scripts["post.js"].url)
 	ctx := r.Context()
 	d.Views, _ = p.store.Views(ctx, post.Slug) // errors are logged by store; the page still renders
 	d.Votes, _ = p.store.PostVotes(ctx, post.Slug)

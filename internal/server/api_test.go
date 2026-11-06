@@ -235,6 +235,16 @@ func TestSearchStats(t *testing.T) {
 		`hyperhack_search_top_zero_result_queries{query="nothinghere"} 1`, "hyperhack_search_duration_seconds_count 4")
 }
 
+func TestSearchStatsTags(t *testing.T) {
+	s := seoSite(t)
+	s.get("/search?q=%23go")       // tags only: no words to store
+	s.get("/search?q=%23go+bleve") // only the word
+	top, _ := s.d.Store.TopSearches(context.Background(), 10, false)
+	if len(top) != 1 || top[0].Query != "bleve" {
+		t.Errorf("stored = %v", top)
+	}
+}
+
 func TestPopular(t *testing.T) {
 	s := seoSite(t)
 	ctx := context.Background()
