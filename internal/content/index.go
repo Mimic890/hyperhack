@@ -15,8 +15,16 @@ type Index struct {
 	bySlug map[string]*Post
 	byTag  map[string][]*Post // newest first
 	tags   []string           // sorted
+	counts []TagCount         // most posts first, ties by name
 	search bleve.Index
-	Logo   bool // assets/logo.svg is in the mirror
+	Logo   bool    // assets/logo.svg is in the mirror
+	Home   []Block // main page blocks
+}
+
+// TagCount is a tag with its number of published posts.
+type TagCount struct {
+	Name  string
+	Posts int
 }
 
 // NewIndex builds an index. Drafts are left out.
@@ -24,7 +32,7 @@ type Index struct {
 func NewIndex(posts []*Post, log *slog.Logger) *Index {
 	posts = slices.Clone(posts)
 	slices.SortFunc(posts, func(a, b *Post) int { return strings.Compare(a.Key, b.Key) })
-	ix := &Index{bySlug: map[string]*Post{}}
+	ix := &Index{bySlug: map[string]*Post{}, Home: DefaultHome()}
 	for _, p := range posts {
 		if p.Draft {
 			continue
@@ -44,6 +52,10 @@ func NewIndex(posts []*Post, log *slog.Logger) *Index {
 		}
 	}
 	ix.tags = slices.Sorted(maps.Keys(ix.byTag))
+	for _, t := range ix.tags {
+		ix.counts = append(ix.counts, TagCount{t, len(ix.byTag[t])})
+	}
+	slices.SortStableFunc(ix.counts, func(a, b TagCount) int { return b.Posts - a.Posts })
 	var err error
 	if ix.search, err = newSearchIndex(ix.posts); err != nil {
 		panic(err) // the mapping is static, so this is a bug, not bad input
@@ -56,6 +68,9 @@ func (ix *Index) Tag(tag string) []*Post { return ix.byTag[tag] }
 
 // Tags returns all tags, sorted.
 func (ix *Index) Tags() []string { return ix.tags }
+
+// TopTags returns the n most used tags. Callers must not change the slice.
+func (ix *Index) TopTags(n int) []TagCount { return ix.counts[:min(n, len(ix.counts))] }
 
 // Get returns the post with this slug, or nil.
 func (ix *Index) Get(slug string) *Post { return ix.bySlug[slug] }

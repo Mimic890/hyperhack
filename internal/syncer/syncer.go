@@ -19,6 +19,9 @@ const fetchTimeout = 5 * time.Minute
 // LogoKey is the optional site logo; Caddy serves it as /assets/logo.svg.
 const LogoKey = "assets/logo.svg"
 
+// HomeKey lists the main page blocks.
+const HomeKey = "home.md"
+
 // Options holds the limits from the config.
 type Options struct {
 	PollInterval  time.Duration
@@ -43,6 +46,9 @@ type Syncer struct {
 
 	mu        sync.Mutex
 	cache     map[string]cached // post key → last parse result
+	home      []content.Block   // blocks from homeETag
+	homeETag  string            // "" when there is no home.md
+	homeRead  bool
 	warned    map[string]string // key → ETag already warned about, so polls do not repeat WARNs
 	maxWarned bool
 	index     atomic.Pointer[content.Index]
@@ -187,7 +193,7 @@ func (s *Syncer) sync(ctx context.Context) error {
 			continue
 		}
 		limit := s.opts.MaxAssetBytes
-		if kind == mirror.Post {
+		if kind == mirror.Post || kind == mirror.Home {
 			limit = s.opts.MaxPostBytes
 		}
 		if o.Size > limit {
@@ -290,7 +296,34 @@ func (s *Syncer) rebuild() {
 	s.cache = next
 	ix := content.NewIndex(posts, s.rlog)
 	_, ix.Logo = s.mirror.State()[LogoKey]
+	ix.Home = s.loadHome()
 	s.index.Store(ix)
+}
+
+// loadHome returns the main page blocks. It reads and warns only when home.md changed. Caller holds mu.
+func (s *Syncer) loadHome() []content.Block {
+	etag := s.mirror.State()[HomeKey]
+	if s.homeRead && etag == s.homeETag {
+		return s.home
+	}
+	s.homeRead, s.homeETag = true, etag
+	if etag == "" {
+		s.rlog.Warn("no home.md, using the default blocks")
+		s.home = content.DefaultHome()
+		return s.home
+	}
+	src, err := s.mirror.ReadFile(HomeKey)
+	if err != nil {
+		s.rlog.Warn("home.md unreadable, using the default blocks", "err", err)
+		s.home = content.DefaultHome()
+		return s.home
+	}
+	var problems []string
+	s.home, problems = content.ParseHome(src)
+	for _, p := range problems {
+		s.rlog.Warn("home.md: "+p, "key", HomeKey)
+	}
+	return s.home
 }
 
 func (s *Syncer) parse(key string) *content.Post {

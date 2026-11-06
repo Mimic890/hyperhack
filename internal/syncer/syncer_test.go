@@ -360,3 +360,77 @@ func TestStats(t *testing.T) {
 		t.Errorf("errors = %d", st.Errors)
 	}
 }
+
+func TestHomeFile(t *testing.T) {
+	var logs bytes.Buffer
+	dir := t.TempDir()
+	b := &fakeBucket{objs: map[string]fakeObj{"one.md": {"e1", post("One", "one")}}}
+	m, err := mirror.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(b, m, content.NewRenderer("en"), opts, slog.New(slog.NewTextHandler(&logs, nil)))
+	ctx := context.Background()
+	sync := func() string {
+		t.Helper()
+		logs.Reset()
+		if err := s.Sync(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return logs.String()
+	}
+	blockTypes := func() []string {
+		var out []string
+		for _, x := range s.Index().Home {
+			out = append(out, x.Type)
+		}
+		return out
+	}
+	defaults := []string{content.BlockTags, content.BlockFeatured, content.BlockPosts, content.BlockPopular}
+
+	// No file: default blocks, one WARN, and not again on the next poll or a new post.
+	if l := sync(); !strings.Contains(l, "no home.md") || !slices.Equal(blockTypes(), defaults) {
+		t.Errorf("no file: %v\n%s", blockTypes(), l)
+	}
+	if l := sync(); strings.Contains(l, "home.md") {
+		t.Errorf("repeated WARN:\n%s", l)
+	}
+	b.objs["two.md"] = fakeObj{"e1", post("Two", "two")}
+	if l := sync(); strings.Contains(l, "home.md") {
+		t.Errorf("WARN after a new post:\n%s", l)
+	}
+
+	// A valid file: read on sync, not a post, not on disk as anything else.
+	b.objs["home.md"] = fakeObj{"e1", "---\ntitle: Not a post\ndate: 2026-11-03\nblocks:\n  - type: featured\n---\n"}
+	if l := sync(); strings.Contains(l, "level=WARN") || !slices.Equal(blockTypes(), []string{content.BlockFeatured}) {
+		t.Errorf("valid file: %v\n%s", blockTypes(), l)
+	}
+	if got := slugs(s); !slices.Equal(got, []string{"one", "two"}) {
+		t.Errorf("slugs = %v", got)
+	}
+
+	// A bad block warns once, for this version of the file.
+	b.objs["home.md"] = fakeObj{"e2", "---\nblocks:\n  - type: nope\n  - type: posts\n---\n"}
+	if l := sync(); !strings.Contains(l, "block 1 skipped") || !slices.Equal(blockTypes(), []string{content.BlockPosts}) {
+		t.Errorf("bad block: %v\n%s", blockTypes(), l)
+	}
+	if l := sync(); strings.Contains(l, "home.md") {
+		t.Errorf("repeated WARN:\n%s", l)
+	}
+	b.objs["three.md"] = fakeObj{"e1", post("Three", "three")}
+	if l := sync(); strings.Contains(l, "home.md") || !slices.Equal(blockTypes(), []string{content.BlockPosts}) {
+		t.Errorf("rebuild after a new post: %v\n%s", blockTypes(), l)
+	}
+
+	// Removed: back to the default blocks, with a WARN.
+	delete(b.objs, "home.md")
+	if l := sync(); !strings.Contains(l, "no home.md") || !slices.Equal(blockTypes(), defaults) {
+		t.Errorf("removed: %v\n%s", blockTypes(), l)
+	}
+
+	// Over MAX_POST_BYTES: skipped like a post.
+	b.objs["home.md"] = fakeObj{"e3", strings.Repeat("x", 2<<10)}
+	if l := sync(); !strings.Contains(l, "too large") || !slices.Equal(blockTypes(), defaults) {
+		t.Errorf("too large: %v\n%s", blockTypes(), l)
+	}
+}
