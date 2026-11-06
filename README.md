@@ -115,8 +115,8 @@ All settings come from environment variables in `.env`. [.env.example](.env.exam
 | `ALTCHA_EXPIRES` | `5m` | Challenge lifetime, 10s to 1h. |
 | `ALTCHA_MAX_NUMBER` | `100000` | Challenge difficulty, 1 000 to 10 000 000. |
 | `READING_WPM` | `200` | Words per minute for the reading time, 50 to 1000. |
-| `POPULAR_DAYS`, `POPULAR_LIMIT` | `30`, `5` | "Popular": most views in the last N days, top M posts. |
-| `PAGE_SIZE` | `10` | Posts per page on the main page and tag pages. |
+| `POPULAR_DAYS` | `30` | "Popular": most views in the last N days. The list size is set in `home.md`. |
+| `PAGE_SIZE` | `10` | Posts per page on tag pages, and on the main page unless `home.md` sets `limit`. |
 | `RSS_LIMIT` | `20` | Posts in `/rss.xml`. |
 | `DEFAULT_OG_IMAGE` | empty | Link preview image for pages and posts without `cover`. A file inside `assets/`, e.g. `assets/og.png`. |
 | `INDEXNOW_KEY` | empty | Turns on IndexNow pings (Bing, Yandex). 8 to 128 characters `a-z A-Z 0-9 -`. Served at `/<key>.txt`. |
@@ -182,6 +182,41 @@ Rules:
 - Images: standard Markdown, `![Alt text](assets/photo.webp)`. A path `assets/…` becomes `/assets/…` on the site. External images are blocked by the CSP.
 - Allowed asset types: `png jpg jpeg webp avif gif svg mp4 webm`.
 - `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon. In the top bar it fits a 40×29 px box.
+
+## Main page
+
+The main page is built from blocks listed in `home.md`, in the vault root. Without the file you get `tags`, `featured`, `posts` by year and `popular` in the side column. A `home.md` in a subfolder is an ordinary post.
+
+```yaml
+---
+blocks:
+  - type: intro
+    title: {en: "Long posts about self-hosting and Go.", ru: "Длинные посты про self-hosting и Go."}
+    text: Notes from running my own infrastructure.
+  - type: tags
+    limit: 6
+  - type: featured
+  - type: posts
+    group: year
+  - type: popular
+    limit: 4
+    area: side
+---
+```
+
+| `type` | Fields | Shows |
+|---|---|---|
+| `intro` | `title` up to 200 characters, `text` up to 500, both optional | Heading and subtitle. Plain text only. |
+| `tags` | `limit` 1–20, default 6 | "All posts" and the most used tags with post counts. |
+| `featured` | none | The latest post as a card. |
+| `posts` | `group: year` or `none` (default), `limit` 1–100, default `PAGE_SIZE` | Post list with pagination, without the `featured` post. Only the first `posts` block is used. |
+| `popular` | `limit` 1–10, default 4 | Most viewed posts of the last `POPULAR_DAYS` days and an RSS link. Hidden until there are views. |
+
+- Blocks appear from top to bottom in file order. Pages 2 and on show only the `posts` block.
+- `area: side` puts any block into a right column on screens from 860 px; below that it goes after the others.
+- `title` and `text` are a string or a map by language. With no entry for the reader's language, the first one is used.
+- An unknown `type`, an unknown field or an invalid value skips the block. With no `home.md`, invalid YAML or no valid blocks, the default blocks are used. Each case logs a WARN once, when the file changes or at startup.
+- When upgrading: a `home.md` in the root that was a post stops being one, so rename it. `POPULAR_LIMIT` in `.env` no longer has any effect.
 
 ## Publishing from Obsidian
 

@@ -15,6 +15,10 @@ func TestClassify(t *testing.T) {
 		wantErr bool
 	}{
 		{"post.md", Post, false},
+		{"home.md", Home, false},
+		{"notes/home.md", Post, false},
+		{"Home.md", Post, false},
+		{"_home.md", Ignore, false},
 		{"notes/deep/Пост.MD", Post, false},
 		{"assets/a.webp", Asset, false},
 		{"assets/covers/b.JPG", Asset, false},

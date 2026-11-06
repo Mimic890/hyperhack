@@ -1,24 +1,77 @@
 {{define "title"}}{{.Site.Name}}{{if gt .Page 1}} — {{t "page_of" "n" .Page "m" .Pages}}{{end}}{{end}}
 {{define "searchbutton"}}<a class="search-field" href="/search" title="{{t "search_placeholder"}}" aria-label="{{t "search_placeholder"}}">{{template "searchicon"}}<span>{{t "search_placeholder"}}</span><kbd>Ctrl K</kbd></a>{{end}}
 {{define "main"}}
-{{template "searchform" .}}
-<section aria-labelledby="newest">
-  <h1 id="newest" class="section-title">{{t "newest"}}</h1>
-  {{- range .Posts}}
-  {{template "card" .}}
-  {{- else}}
-  <p class="empty">{{t "no_posts"}}</p>
-  {{- end}}
-</section>
-{{- template "pager" .}}
-{{- with .Popular}}
-<section class="popular" aria-labelledby="popular">
-  <h2 id="popular" class="section-title">{{t "popular"}}</h2>
-  <ol>
-    {{- range .}}
-    <li><a href="/posts/{{.Slug}}">{{.Title}}</a></li>
-    {{- end}}
-  </ol>
-</section>
+{{- if .HiddenH1}}
+<h1 class="sr">{{.Site.Name}}</h1>
 {{- end}}
+<div class="home{{if .SideBlocks}} has-side{{end}}">
+  <div class="home-main">
+  {{- range .MainBlocks}}
+  {{template "block" .}}
+  {{- end}}
+  </div>
+  {{- with .SideBlocks}}
+  <aside class="home-side">
+  {{- range .}}
+  {{template "block" .}}
+  {{- end}}
+  </aside>
+  {{- end}}
+</div>
 {{end}}
+{{define "block"}}
+{{- if eq .Type "intro"}}<section class="intro">
+    {{- if .H1}}<h1>{{.Title}}</h1>{{else if .Title}}<h2>{{.Title}}</h2>{{end}}
+    {{- with .Text}}<p>{{.}}</p>{{end -}}
+  </section>
+{{- else if eq .Type "tags"}}<nav class="top-tags" aria-label="{{t "tags"}}">
+    <ul class="tags">
+      <li><a class="tag" href="/" aria-current="page">{{t "all_posts"}}<span class="n">{{.AllPosts}}</span></a></li>
+      {{- range .Tags}}
+      <li><a class="tag" href="{{tagPath .Name}}"><span>#</span>{{.Name}}<span class="n">{{.Posts}}</span></a></li>
+      {{- end}}
+    </ul>
+  </nav>
+{{- else if eq .Type "featured"}}{{with .Featured}}<article class="featured">
+    {{- if .Cover}}
+    <img src="{{asset .Cover}}" alt=""{{if .CoverW}} width="{{.CoverW}}" height="{{.CoverH}}"{{end}}>
+    {{- end}}
+    <div class="featured-body">
+      <p class="label">{{t "new_post"}}</p>
+      <h2><a href="/posts/{{.Slug}}">{{.Title}}</a></h2>
+      {{- with .Description}}
+      <p class="desc">{{.}}</p>
+      {{- end}}
+      <p class="meta">{{template "date" .Date}} <span>{{t "min_read" "n" (minutes .Words)}}</span></p>
+      {{- template "tags" .Tags}}
+    </div>
+  </article>{{end}}
+{{- else if eq .Type "posts"}}<section class="post-list" aria-label="{{t "newest"}}">
+    {{- if .Years}}
+    {{- range .Years}}
+    <h2 class="year">{{.Year}} <span class="n">{{.Count}}</span></h2>
+    {{- range .Posts}}
+    {{template "rowshort" .}}
+    {{- end}}
+    {{- end}}
+    {{- else}}
+    <h2 class="sr">{{t "newest"}}</h2>
+    {{- range .Posts}}
+    {{template "row" .}}
+    {{- else}}{{if .NoPosts}}
+    <p class="empty">{{t "no_posts"}}</p>
+    {{- end}}{{end}}
+    {{- end}}
+    {{- template "pager" .Pager}}
+  </section>
+{{- else if eq .Type "popular"}}<section class="popular" aria-label="{{t "popular"}}">
+    <h2 class="section-title">{{t "popular"}}</h2>
+    <ol>
+      {{- range .Popular}}
+      <li><a href="/posts/{{.Slug}}">{{.Title}}</a><p class="meta">{{t "views" "n" .Views}}</p></li>
+      {{- end}}
+    </ol>
+    <a class="rss-link" href="/rss.xml">{{t "subscribe_rss"}}</a>
+  </section>
+{{- end}}
+{{- end}}

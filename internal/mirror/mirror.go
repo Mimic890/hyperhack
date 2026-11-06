@@ -28,6 +28,7 @@ const (
 	Ignore Kind = iota // not mirrored
 	Post               // .md file outside assets/
 	Asset              // allowlisted file inside assets/
+	Home               // home.md in the root: main page blocks, not a post
 )
 
 // assetExts matches the Caddy allowlist for /assets/*.
@@ -68,6 +69,9 @@ func Classify(key string) (Kind, error) {
 			return Asset, nil
 		}
 		return Ignore, nil
+	}
+	if key == "home.md" {
+		return Home, nil
 	}
 	if ext == ".md" {
 		return Post, nil

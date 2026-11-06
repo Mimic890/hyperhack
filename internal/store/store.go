@@ -149,21 +149,27 @@ func (s *Store) Views(ctx context.Context, slug string) (int64, error) {
 	return n, s.fail("read views", err)
 }
 
-// Popular returns slugs by views since day (inclusive), most viewed first.
+// Viewed is a post with its views in a time window.
+type Viewed struct {
+	Slug  string
+	Views int64
+}
+
+// Popular returns posts by views since day (inclusive), most viewed first.
 // Ties go to the slug order, so the list is stable.
-func (s *Store) Popular(ctx context.Context, since string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT slug FROM daily_views WHERE day >= ? GROUP BY slug ORDER BY SUM(n) DESC, slug`, since)
+func (s *Store) Popular(ctx context.Context, since string) ([]Viewed, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT slug, SUM(n) FROM daily_views WHERE day >= ? GROUP BY slug ORDER BY SUM(n) DESC, slug`, since)
 	if err != nil {
 		return nil, s.fail("read popular", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var out []string
+	var out []Viewed
 	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
+		var v Viewed
+		if err := rows.Scan(&v.Slug, &v.Views); err != nil {
 			return nil, s.fail("read popular", err)
 		}
-		out = append(out, slug)
+		out = append(out, v)
 	}
 	return out, s.fail("read popular", rows.Err())
 }

@@ -57,10 +57,9 @@ type Config struct {
 	RateReindex Rate
 	RateSearch  Rate
 
-	PopularDays  int
-	PopularLimit int
-	PageSize     int
-	RSSLimit     int
+	PopularDays int
+	PageSize    int
+	RSSLimit    int
 
 	DefaultOGImage string
 	IndexNowKey    string
@@ -120,10 +119,9 @@ func Load(getenv func(string) string) (*Config, error) {
 		RateReindex: l.rate("RATE_LIMIT_REINDEX", "5/1m"),
 		RateSearch:  l.rate("RATE_LIMIT_SEARCH", "30/1m"),
 
-		PopularDays:  l.int("POPULAR_DAYS", 30, 1, 3650),
-		PopularLimit: l.int("POPULAR_LIMIT", 5, 1, 100),
-		PageSize:     l.int("PAGE_SIZE", 10, 1, 100),
-		RSSLimit:     l.int("RSS_LIMIT", 20, 1, 1000),
+		PopularDays: l.int("POPULAR_DAYS", 30, 1, 3650),
+		PageSize:    l.int("PAGE_SIZE", 10, 1, 100),
+		RSSLimit:    l.int("RSS_LIMIT", 20, 1, 1000),
 
 		DefaultOGImage: l.asset("DEFAULT_OG_IMAGE"),
 		IndexNowKey:    l.match("INDEXNOW_KEY", indexNowKeyRe, "8–128 characters a-z, A-Z, 0-9 or -"),

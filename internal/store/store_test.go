@@ -40,10 +40,10 @@ func TestStore(t *testing.T) {
 	if n, _ := s.Views(ctx, "none"); n != 0 {
 		t.Errorf("views none = %d", n)
 	}
-	if p, _ := s.Popular(ctx, "2026-11-02"); !slices.Equal(p, []string{"b", "a"}) {
+	if p, _ := s.Popular(ctx, "2026-11-02"); !slices.Equal(popularSlugs(p), []string{"b", "a"}) {
 		t.Errorf("popular recent = %v", p)
 	}
-	if p, _ := s.Popular(ctx, "2026-10-01"); !slices.Equal(p, []string{"a", "b"}) {
+	if p, _ := s.Popular(ctx, "2026-10-01"); !slices.Equal(popularSlugs(p), []string{"a", "b"}) {
 		t.Errorf("popular all = %v", p)
 	}
 	tot, _ := s.Totals(ctx)
@@ -88,7 +88,7 @@ func TestStore(t *testing.T) {
 	if top, _ := s.TopSearches(ctx, 10, false); len(top) != 1 || top[0].Query != "go" {
 		t.Errorf("after prune = %v", top)
 	}
-	if p, _ := s.Popular(ctx, "2000-01-01"); !slices.Equal(p, []string{"b", "a"}) {
+	if p, _ := s.Popular(ctx, "2000-01-01"); !slices.Equal(popularSlugs(p), []string{"b", "a"}) {
 		t.Errorf("popular after prune = %v", p)
 	}
 
@@ -102,4 +102,12 @@ func TestStore(t *testing.T) {
 	if n, _ := s2.Views(ctx, "a"); n != 6 {
 		t.Errorf("views after reopen = %d", n)
 	}
+}
+
+func popularSlugs(v []Viewed) []string {
+	var out []string
+	for _, e := range v {
+		out = append(out, e.Slug)
+	}
+	return out
 }

@@ -74,12 +74,9 @@
 {{define "searchicon"}}<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>{{end}}
 {{define "date"}}<time datetime="{{.Format "2006-01-02"}}">{{date .}}</time>{{end}}
 {{define "tags"}}{{with .}}<ul class="tags">{{range .}}<li><a class="tag" href="{{tagPath .}}"><span>#</span>{{.}}</a></li>{{end}}</ul>{{end}}{{end}}
-{{define "card"}}<article class="card">
-    <h2><a href="/posts/{{.Slug}}">{{.Title}}</a></h2>
-    <p class="meta">{{template "date" .Date}} <span>{{t "min_read" "n" (minutes .Words)}}</span></p>
-    {{- with .Description}}<p class="desc">{{.}}</p>{{end}}
-    {{- template "tags" .Tags}}
-  </article>{{end}}
+{{define "row"}}<article class="row">{{template "date" .Date}}{{template "rowbody" .}}</article>{{end}}
+{{define "rowshort"}}<article class="row"><time datetime="{{.Date.Format "2006-01-02"}}">{{dateShort .Date}}</time>{{template "rowbody" .}}</article>{{end}}
+{{define "rowbody"}}<div><h3><a href="/posts/{{.Slug}}">{{.Title}}</a></h3>{{with .Description}}<p class="desc">{{.}}</p>{{end}}</div><span class="read">{{t "min_read" "n" (minutes .Words)}}</span>{{end}}
 {{define "pager"}}{{if gt .Pages 1}}
 <nav class="pager" aria-label="{{t "pages"}}">
   {{- if gt .Page 1}}<a rel="prev" href="{{pageURL .PageBase (add .Page -1)}}">← {{if .Query}}{{t "prev"}}{{else}}{{t "newer"}}{{end}}</a>{{else}}<span></span>{{end}}
