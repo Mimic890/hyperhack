@@ -72,6 +72,24 @@
 <main id="main">
 {{block "main" .}}{{end}}
 </main>
+<dialog class="palette" id="palette" lang="{{.Lang}}" aria-label="{{t "search"}}">
+  <form action="/search" method="get" role="search">
+    {{template "searchicon"}}
+    <input type="search" name="q" maxlength="200" placeholder="{{t "search_placeholder"}}" autocomplete="off" role="combobox" aria-label="{{t "search"}}" aria-autocomplete="list" aria-controls="palette-list" aria-expanded="false">
+  </form>
+  <ul class="tags palette-chips" aria-label="{{t "tags"}}" hidden></ul>
+  <div class="palette-list" id="palette-list" role="listbox" aria-label="{{t "results"}}"></div>
+  <p class="sr" role="status"></p>
+  <p class="palette-foot">
+    <span><kbd>{{t "palette_tag_key"}}</kbd> {{t "palette_tag"}}</span>
+    <span><kbd>↑ ↓</kbd> {{t "palette_select"}}</span>
+    <span><kbd>Enter</kbd> {{t "palette_open"}}</span>
+    <span><kbd>Esc</kbd> {{t "palette_close"}}</span>
+  </p>
+  {{- with .TagData}}
+  <script type="application/json" id="tag-data">{{.}}</script>
+  {{- end}}
+</dialog>
 </body>
 </html>
 {{define "searchicon"}}<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>{{end}}
@@ -89,8 +107,5 @@
 {{- end}}{{end}}
 {{define "searchform"}}<form id="search" class="search" role="search" action="/search" method="get">
   <input type="search" name="q" value="{{.Query}}" maxlength="200" placeholder="{{t "search_placeholder"}}" aria-label="{{t "search"}}">
-  {{- with .Tags}}
-  <select name="tag" aria-label="{{t "tag_filter"}}"><option value="">{{t "all_tags"}}</option>{{range .}}<option value="{{.}}"{{if eq . $.Tag}} selected{{end}}>#{{.}}</option>{{end}}</select>
-  {{- end}}
   <button type="submit">{{t "search"}}</button>
 </form>{{end}}

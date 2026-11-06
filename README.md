@@ -9,7 +9,7 @@ You write posts in Obsidian. The vault syncs to an S3 bucket (Garage) and the bl
 - Posts are Markdown files with Obsidian properties (YAML frontmatter).
 - Pages are rendered on the server and work without JS.
 - Light and dark themes. The UI is in English and Russian.
-- Search in English and Russian, with typo tolerance and search-as-you-type.
+- Search in English and Russian, with typo tolerance and search-as-you-type. `Ctrl K`, `Cmd K` or `/` open a palette on any page; `#tag` in a query filters by tag.
 - Tags, RSS, sitemap, Open Graph, JSON-LD, `llms.txt` and IndexNow.
 - Each post shows its reading time, view count, likes and dislikes. Votes are anonymous and need an ALTCHA proof of work.
 - Private per-post metrics on `/metrics` (Prometheus format), with a Grafana dashboard.
