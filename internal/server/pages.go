@@ -54,7 +54,8 @@ type pageData struct {
 	CSS     string
 	Site    site
 
-	JS []string // versioned script URLs for this page
+	JS           []string // versioned script URLs for this page, deferred
+	TransitionJS string   // versioned, blocking: it must run before the first frame
 
 	TagData template.JS // tags with post counts for the search palette, from json.Marshal
 
@@ -186,7 +187,7 @@ func newPages(log *slog.Logger, cfg *config.Config, d Deps) *pages {
 	p.css = append(css, themedChromaCSS()...)
 	p.cssV = versioned("/static/style.css", p.css)
 	p.scripts = map[string]script{}
-	for _, name := range []string{"search.js", "altcha.js", "post.js"} {
+	for _, name := range []string{"search.js", "altcha.js", "post.js", "transition.js"} {
 		b, err := webFS.ReadFile("web/static/" + name)
 		if err != nil {
 			panic(err)
@@ -313,12 +314,13 @@ func (p *pages) paginate(r *http.Request, d *pageData, posts []*content.Post, ba
 
 func (p *pages) data(r *http.Request) pageData {
 	d := pageData{
-		Lang:   p.cfg.DefaultLang,
-		Path:   r.URL.RequestURI(),
-		CSS:    p.cssV,
-		Site:   site{Name: p.cfg.SiteName, GitHub: p.cfg.GitHubURL},
-		OGType: "website",
-		JS:     []string{p.scripts["search.js"].url},
+		Lang:         p.cfg.DefaultLang,
+		Path:         r.URL.RequestURI(),
+		CSS:          p.cssV,
+		Site:         site{Name: p.cfg.SiteName, GitHub: p.cfg.GitHubURL},
+		OGType:       "website",
+		JS:           []string{p.scripts["search.js"].url},
+		TransitionJS: p.scripts["transition.js"].url,
 	}
 	if p.cfg.DefaultOGImage != "" {
 		d.Image = p.abs(assetPath(p.cfg.DefaultOGImage))
