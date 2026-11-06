@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"html/template"
 	"log/slog"
@@ -27,7 +28,7 @@ func testConfig() *config.Config {
 	return &config.Config{
 		SiteName: "Test <Blog>", SiteURL: u, DefaultLang: "en", ReadingWPM: 200, PageSize: 2,
 		AltchaHMACKey: "0123456789abcdef0123456789abcdef", VisitorSecret: "visitor-secret-visitor-secret-32b",
-		AltchaExpires: 5 * time.Minute, AltchaMaxNumber: 1000, PopularDays: 30, PopularLimit: 5,
+		AltchaExpires: 5 * time.Minute, AltchaMaxNumber: 1000, PopularDays: 30,
 		RateVote: lots, RateBeacon: lots, RateSearch: lots, RateReindex: lots, MetricsAllow: private,
 	}
 }
@@ -114,30 +115,142 @@ func TestI18nKeysMatch(t *testing.T) {
 }
 
 func TestHome(t *testing.T) {
-	s := newSite(t, testConfig(), testIndex(4)) // 5 posts, 2 per page
+	s := newSite(t, testConfig(), testIndex(4)) // 5 posts: one featured, the rest 2 per page
 	rec := s.get("/")
 	body := rec.Body.String()
 	if rec.Code != 200 || rec.Header().Get("Content-Type") != "text/html; charset=utf-8" {
 		t.Fatalf("home = %d %s", rec.Code, rec.Header().Get("Content-Type"))
 	}
-	mustContain(t, body, `<html lang="en">`, "Test &lt;Blog&gt;", `href="/posts/post-d"`, "Post D", "Post C",
-		`<time datetime="2026-11-04">November 4, 2026</time>`, "3 min read", "Page 1 of 3", `href="/?page=2"`,
+	mustContain(t, body, `<html lang="en">`, "Test &lt;Blog&gt;", `<h1 class="sr">Test &lt;Blog&gt;</h1>`,
+		`<article class="featured">`, `<h2><a href="/posts/post-d">Post D</a></h2>`, `<time datetime="2026-11-04">November 4, 2026</time>`,
+		`<h3><a href="/posts/post-c">Post C</a></h3>`, `<time datetime="2026-11-03">November 3</time>`, `<h2 class="year">2026 <span class="n">4</span></h2>`,
+		"3 min read", "Page 1 of 2", `href="/?page=2"`,
 		`<svg class="logo"`, `name="back" value="/"`, `popovertarget="lang-menu"`, `aria-current="true">English`)
-	if strings.Contains(body, "Post B") || strings.Contains(body, "github") {
-		t.Error("page 1 shows too much")
+	for _, no := range []string{"Post A", "github", `id="search"`, `<h3><a href="/posts/post-d"`} {
+		if strings.Contains(body, no) {
+			t.Errorf("page 1 has %q", no)
+		}
 	}
 
-	body = s.get("/?page=3").Body.String()
-	mustContain(t, body, "&lt;script&gt;", "&#34;&gt;&lt;img src=x", `rel="prev" href="/?page=2"`, "Page 3 of 3")
+	body = s.get("/?page=2").Body.String()
+	mustContain(t, body, "&lt;script&gt;", "&#34;&gt;&lt;img src=x", `rel="prev" href="/"`, "Page 2 of 2", `<h3><a href="/posts/post-a">`, `<h2 class="year">2026 <span class="n">4</span></h2>`)
 	if strings.Contains(body, "<script>alert") || strings.Contains(body, "<img src=x") {
 		t.Error("frontmatter not escaped")
 	}
-	mustContain(t, s.get("/?page=2").Body.String(), `rel="prev" href="/"`)
-	for _, bad := range []string{"/?page=1", "/?page=4", "/?page=0", "/?page=abc", "/?page=-1"} {
+	for _, no := range []string{`class="featured"`, `class="top-tags"`, "post-d"} {
+		if strings.Contains(body, no) {
+			t.Errorf("page 2 has %q", no)
+		}
+	}
+	for _, bad := range []string{"/?page=1", "/?page=3", "/?page=0", "/?page=abc", "/?page=-1"} {
 		if got := s.get(bad).Code; got != 404 {
 			t.Errorf("%s = %d, want 404", bad, got)
 		}
 	}
+}
+
+// homeSite is a site whose main page has these blocks, parsed from home.md.
+func homeSite(t *testing.T, blocks string, ix *content.Index) *testSite {
+	t.Helper()
+	parsed, problems := content.ParseHome([]byte("---\nblocks:\n" + blocks + "---\n"))
+	if len(problems) != 0 {
+		t.Fatal(problems)
+	}
+	ix.Home = parsed
+	return newSite(t, testConfig(), ix)
+}
+
+func TestHomeBlocks(t *testing.T) {
+	tagged := func() *content.Index {
+		var posts []*content.Post
+		for i, y := range []int{2026, 2026, 2025} {
+			posts = append(posts, &content.Post{
+				Key: string(rune('a'+i)) + ".md", Slug: "p" + string(rune('a'+i)), Title: "P" + string(rune('A'+i)), Lang: "en", Words: 10,
+				Date: time.Date(y, 3, 1+i, 0, 0, 0, 0, time.UTC), Tags: []string{"go", "t" + string(rune('a'+i))}, Cover: "assets/c.png", CoverW: 800, CoverH: 600,
+			})
+		}
+		return content.NewIndex(posts, slog.New(slog.DiscardHandler))
+	}
+	inOrder := func(t *testing.T, body string, want ...string) {
+		t.Helper()
+		at := 0
+		for _, w := range want {
+			i := strings.Index(body[at:], w)
+			if i < 0 {
+				t.Fatalf("missing %q after byte %d", w, at)
+			}
+			at += i
+		}
+	}
+
+	t.Run("order and intro", func(t *testing.T) {
+		s := homeSite(t, "  - {type: tags, limit: 2}\n  - {type: intro, title: {ru: Привет, en: <b>Hi</b>}, text: Sub}\n  - {type: intro, title: Two}\n  - {type: featured}\n", tagged())
+		body := s.get("/").Body.String()
+		inOrder(t, body, `<nav class="top-tags"`, "<h1>&lt;b&gt;Hi&lt;/b&gt;</h1>", "<p>Sub</p>", "<h2>Two</h2>", `<article class="featured">`)
+		if strings.Contains(body, `<h1 class="sr"`) {
+			t.Error("a second h1 for the site name")
+		}
+		// No posts block: no list, no page 2.
+		if strings.Contains(body, `class="post-list"`) || s.get("/?page=2").Code != 404 {
+			t.Error("posts without a posts block")
+		}
+		mustContain(t, s.get("/", &http.Cookie{Name: "lang", Value: "ru"}).Body.String(), "<h1>Привет</h1>", "Новый пост")
+	})
+
+	t.Run("tags", func(t *testing.T) {
+		body := homeSite(t, "  - {type: tags, limit: 2}\n", tagged()).get("/").Body.String()
+		inOrder(t, body, `href="/" aria-current="page">All posts<span class="n">3</span>`, `href="/tags/go"><span>#</span>go<span class="n">3</span>`, `href="/tags/ta"><span>#</span>ta<span class="n">1</span>`)
+		if strings.Contains(body, "/tags/tb") {
+			t.Error("limit ignored")
+		}
+		if b := newSite(t, testConfig(), testIndex(1)).get("/").Body.String(); strings.Contains(b, `class="top-tags"`) {
+			t.Error("tags block without tags")
+		}
+	})
+
+	t.Run("featured cover", func(t *testing.T) {
+		body := homeSite(t, "  - {type: featured}\n", tagged()).get("/").Body.String()
+		mustContain(t, body, `<img src="/assets/c.png" alt="" width="800" height="600">`, "New post")
+	})
+
+	t.Run("posts by year and limit", func(t *testing.T) {
+		s := homeSite(t, "  - {type: posts, group: year, limit: 1}\n", tagged())
+		inOrder(t, s.get("/").Body.String(), `<h2 class="year">2026 <span class="n">2</span></h2>`, `href="/posts/pb"`, "Page 1 of 3")
+		inOrder(t, s.get("/?page=3").Body.String(), `<h2 class="year">2025 <span class="n">1</span></h2>`, `href="/posts/pc"`)
+		// Without featured the newest post stays in the list. Without grouping there is a full date.
+		s = homeSite(t, "  - {type: posts}\n", tagged())
+		body := s.get("/").Body.String()
+		mustContain(t, body, `<h3><a href="/posts/pb"`, "March 2, 2026", `<h2 class="sr">Newest</h2>`)
+		if strings.Contains(body, `class="year"`) {
+			t.Error("year heading without group: year")
+		}
+	})
+
+	t.Run("side column", func(t *testing.T) {
+		s := homeSite(t, "  - {type: featured, area: side}\n  - {type: posts}\n", tagged())
+		body := s.get("/").Body.String()
+		inOrder(t, body, `class="home has-side"`, `class="post-list"`, `<aside class="home-side">`, `class="featured"`)
+		if b := s.get("/?page=2"); b.Code == 200 && strings.Contains(b.Body.String(), "<aside") {
+			t.Error("side column on page 2")
+		}
+		if b := homeSite(t, "  - {type: posts}\n", tagged()).get("/").Body.String(); strings.Contains(b, "has-side") || strings.Contains(b, "<aside") {
+			t.Error("side column without side blocks")
+		}
+	})
+
+	t.Run("popular limit and views", func(t *testing.T) {
+		s := homeSite(t, "  - {type: popular, limit: 1}\n", tagged())
+		if strings.Contains(s.get("/").Body.String(), `class="popular"`) {
+			t.Error("popular without views")
+		}
+		day := store.Day(time.Now())
+		_ = s.d.Store.Add(context.Background(), day, store.Inc{Slug: "pa", Metric: store.View, N: 7}, store.Inc{Slug: "pb", Metric: store.View, N: 2}, store.Inc{Slug: "gone", Metric: store.View, N: 99})
+		body := s.get("/").Body.String()
+		inOrder(t, body, `<section class="popular"`, `<li><a href="/posts/pa">PA</a><p class="meta">Views: 7</p>`, `href="/rss.xml">Subscribe via RSS`)
+		if strings.Contains(body, `href="/posts/pb"`) || strings.Contains(body, "gone") {
+			t.Error("popular limit ignored or a removed post shown")
+		}
+	})
 }
 
 func TestHomeEmptyAndNotReady(t *testing.T) {
@@ -207,10 +320,10 @@ func TestTopBarSearch(t *testing.T) {
 func TestCookies(t *testing.T) {
 	s := newSite(t, testConfig(), testIndex(1))
 	body := s.get("/", &http.Cookie{Name: "lang", Value: "ru"}, &http.Cookie{Name: "theme", Value: "dark"}).Body.String()
-	mustContain(t, body, `<html lang="ru" data-theme="dark">`, `content="dark"`, "Новые", "1 ноября 2026", "3 мин чтения", `aria-label="Язык: ru"`, `aria-current="true">Русский`)
+	mustContain(t, body, `<html lang="ru" data-theme="dark">`, `content="dark"`, "Новый пост", "1 ноября 2026", "3 мин чтения", `aria-label="Язык: ru"`, `aria-current="true">Русский`)
 
 	body = s.get("/", &http.Cookie{Name: "lang", Value: "de"}, &http.Cookie{Name: "theme", Value: `"><script>`}).Body.String()
-	mustContain(t, body, `<html lang="en">`, `content="light dark"`, "Newest")
+	mustContain(t, body, `<html lang="en">`, `content="light dark"`, "New post")
 
 	cfg := testConfig()
 	cfg.DefaultLang = "ru"

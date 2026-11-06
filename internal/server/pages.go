@@ -63,9 +63,12 @@ type pageData struct {
 	JSONLD                 template.JS // from json.Marshal
 
 	Posts       []*content.Post
-	Popular     []*content.Post
 	Page, Pages int
 	PageBase    string // pager URL for page 1; other pages add ?page=N
+
+	// Main page blocks. HiddenH1: no intro title, so the site name is the h1.
+	MainBlocks, SideBlocks []homeBlock
+	HiddenH1               bool
 
 	Post   *content.Post
 	Views  int64
@@ -79,6 +82,31 @@ type pageData struct {
 	Total int
 
 	Title, Text string // i18n keys for the error page
+}
+
+// homeBlock is one main page block, ready for the template.
+type homeBlock struct {
+	Type        string
+	Title, Text string
+	H1          bool
+	Tags        []content.TagCount
+	AllPosts    int
+	Featured    *content.Post
+	Years       []yearGroup
+	Posts       []*content.Post
+	NoPosts     bool // the blog has no posts at all
+	Pager       *pageData
+	Popular     []popularPost
+}
+
+type yearGroup struct {
+	Year, Count int // Count: posts of the year in the whole list, not only on this page
+	Posts       []*content.Post
+}
+
+type popularPost struct {
+	*content.Post
+	Views int64
 }
 
 type pages struct {
@@ -195,6 +223,9 @@ func funcs(msgs map[string]string, wpm int) template.FuncMap {
 		"date": func(d time.Time) string {
 			return t("date", "day", d.Day(), "month", t("month_"+strconv.Itoa(int(d.Month()))), "year", d.Year())
 		},
+		"dateShort": func(d time.Time) string {
+			return t("date_short", "day", d.Day(), "month", t("month_"+strconv.Itoa(int(d.Month()))))
+		},
 		"minutes": func(words int) int { return max(1, (words+wpm-1)/wpm) },
 		"asset":   assetPath,
 		"add":     func(a, b int) int { return a + b },
@@ -265,8 +296,7 @@ func pageParam(r *http.Request, pages int) (int, bool) {
 }
 
 // paginate cuts posts to one page and sets the pager. False means the page does not exist.
-func (p *pages) paginate(r *http.Request, d *pageData, posts []*content.Post, base string) bool {
-	size := p.cfg.PageSize
+func (p *pages) paginate(r *http.Request, d *pageData, posts []*content.Post, base string, size int) bool {
 	d.Pages = max(1, (len(posts)+size-1)/size)
 	var ok bool
 	if d.Page, ok = pageParam(r, d.Pages); !ok {
@@ -335,24 +365,98 @@ func (p *pages) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := p.data(r)
-	if !p.paginate(r, &d, ix.Posts(), "/") {
+	all := ix.Posts()
+	isType := func(t string) func(content.Block) bool {
+		return func(b content.Block) bool { return b.Type == t }
+	}
+	// What the posts block lists: the featured post does not repeat, on any page.
+	list := all
+	if slices.ContainsFunc(ix.Home, isType(content.BlockFeatured)) && len(all) > 0 {
+		list = all[1:]
+	}
+	size := p.cfg.PageSize
+	if i := slices.IndexFunc(ix.Home, isType(content.BlockPosts)); i < 0 {
+		list = nil // no pagination, so /?page=2 is 404
+	} else if ix.Home[i].Limit > 0 {
+		size = ix.Home[i].Limit
+	}
+	if !p.paginate(r, &d, list, "/", size) {
 		p.errorPage(w, r, http.StatusNotFound)
 		return
 	}
-	d.Tags = ix.Tags()
-	if d.Page == 1 {
-		d.Popular = p.popular(r.Context(), ix)
+	var popular []popularPost
+	if d.Page == 1 && slices.ContainsFunc(ix.Home, isType(content.BlockPopular)) {
+		popular = p.popular(r.Context(), ix)
+	}
+	d.HiddenH1 = true
+	for _, b := range ix.Home {
+		if d.Page > 1 && b.Type != content.BlockPosts {
+			continue
+		}
+		hb := homeBlock{Type: b.Type}
+		switch b.Type {
+		case content.BlockIntro:
+			hb.Title, hb.Text = b.Title.In(d.Lang), b.Text.In(d.Lang)
+			if hb.Title == "" && hb.Text == "" {
+				continue
+			}
+			if hb.Title != "" && d.HiddenH1 {
+				hb.H1, d.HiddenH1 = true, false
+			}
+		case content.BlockTags:
+			hb.Tags, hb.AllPosts = ix.TopTags(b.Limit), len(all)
+			if len(hb.Tags) == 0 {
+				continue
+			}
+		case content.BlockFeatured:
+			if len(all) == 0 {
+				continue
+			}
+			hb.Featured = all[0]
+		case content.BlockPosts:
+			hb.Posts, hb.NoPosts, hb.Pager = d.Posts, len(all) == 0, &d
+			if b.GroupYear {
+				hb.Years = yearGroups(d.Posts, list)
+			}
+		case content.BlockPopular:
+			hb.Popular = popular[:min(b.Limit, len(popular))]
+			if len(hb.Popular) == 0 {
+				continue
+			}
+		}
+		if b.Side {
+			d.SideBlocks = append(d.SideBlocks, hb)
+		} else {
+			d.MainBlocks = append(d.MainBlocks, hb)
+		}
 	}
 	p.render(w, http.StatusOK, "home", d)
 }
 
-// popular is the top POPULAR_LIMIT posts by views in the last POPULAR_DAYS days (today included).
-func (p *pages) popular(ctx context.Context, ix *content.Index) []*content.Post {
-	slugs, _ := p.store.Popular(ctx, store.Day(time.Now().AddDate(0, 0, 1-p.cfg.PopularDays))) // error logged by store
-	var out []*content.Post
-	for _, s := range slugs {
-		if post := ix.Get(s); post != nil && len(out) < p.cfg.PopularLimit {
-			out = append(out, post)
+// yearGroups splits one page of posts by year. Posts are newest first; list is the whole list.
+func yearGroups(page, list []*content.Post) []yearGroup {
+	counts := map[int]int{}
+	for _, post := range list {
+		counts[post.Date.Year()]++
+	}
+	var out []yearGroup
+	for _, post := range page {
+		y := post.Date.Year()
+		if len(out) == 0 || out[len(out)-1].Year != y {
+			out = append(out, yearGroup{Year: y, Count: counts[y]})
+		}
+		out[len(out)-1].Posts = append(out[len(out)-1].Posts, post)
+	}
+	return out
+}
+
+// popular is the posts by views in the last POPULAR_DAYS days (today included), most viewed first.
+func (p *pages) popular(ctx context.Context, ix *content.Index) []popularPost {
+	viewed, _ := p.store.Popular(ctx, store.Day(time.Now().AddDate(0, 0, 1-p.cfg.PopularDays))) // error logged by store
+	var out []popularPost
+	for _, v := range viewed {
+		if post := ix.Get(v.Slug); post != nil {
+			out = append(out, popularPost{post, v.Views})
 		}
 	}
 	return out
@@ -368,7 +472,7 @@ func (p *pages) tag(w http.ResponseWriter, r *http.Request) {
 	tag := r.PathValue("tag")
 	posts := ix.Tag(tag)
 	d := p.data(r)
-	if len(posts) == 0 || !p.paginate(r, &d, posts, tagPath(tag)) {
+	if len(posts) == 0 || !p.paginate(r, &d, posts, tagPath(tag), p.cfg.PageSize) {
 		p.errorPage(w, r, http.StatusNotFound)
 		return
 	}

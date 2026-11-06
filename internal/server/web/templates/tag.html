@@ -2,8 +2,9 @@
 {{define "main"}}
 <section aria-labelledby="tag-title">
   <h1 id="tag-title" class="section-title">#{{.Tag}}</h1>
+  <h2 class="sr">{{t "newest"}}</h2>
   {{- range .Posts}}
-  {{template "card" .}}
+  {{template "row" .}}
   {{- end}}
 </section>
 {{- template "pager" .}}
