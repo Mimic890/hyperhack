@@ -47,7 +47,7 @@ func TestPostHead(t *testing.T) {
 		`<meta name="twitter:card" content="summary_large_image">`,
 		`<link rel="alternate" type="application/rss+xml"`,
 		`<img class="cover" src="/assets/c.png" alt="" width="1200" height="630">`,
-		`href="/tags/dev/tools">#dev/tools</a>`,
+		`href="/tags/dev/tools"><span>#</span>dev/tools</a>`,
 	)
 	m := regexp.MustCompile(`(?s)<script type="application/ld\+json">(.*?)</script>`).FindStringSubmatch(body)
 	if m == nil {

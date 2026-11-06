@@ -43,11 +43,12 @@
 <a class="skip" href="#main" lang="{{.Lang}}">{{t "skip"}}</a>
 <header class="topbar" lang="{{.Lang}}">
   <a class="brand" href="/" aria-label="{{.Site.Name}} — {{t "home"}}">
-    {{- if .Site.Logo}}<img class="logo" src="/assets/logo.svg" alt="" width="28" height="28">
-    {{- else}}<svg class="logo" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M10 8v16M22 8v16M10 16h12" stroke-width="3" stroke-linecap="round"/></svg>
+    {{- if .Site.Logo}}<img class="logo" src="/assets/logo.svg" alt="" width="40" height="29">
+    {{- else}}<svg class="logo" viewBox="0 0 40 29" width="40" height="29" aria-hidden="true"><rect width="40" height="29" rx="8" fill="currentColor"/><path d="M14 8v13M26 8v13M14 14.5h12" stroke-width="3" stroke-linecap="round"/></svg>
     {{- end}}<span>{{.Site.Name}}</span>
   </a>
   <nav class="tools" aria-label="{{t "settings"}}">
+    {{block "searchbutton" .}}<a class="icon" href="/search" title="{{t "search_placeholder"}}" aria-label="{{t "search_placeholder"}}">{{template "searchicon"}}</a>{{end}}
     <form method="post" action="/prefs" class="prefs">
       <input type="hidden" name="back" value="{{.Path}}">
       <button class="icon to-dark" name="theme" value="dark" title="{{t "to_dark"}}" aria-label="{{t "to_dark"}}"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
@@ -70,11 +71,12 @@
 </main>
 </body>
 </html>
+{{define "searchicon"}}<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>{{end}}
 {{define "date"}}<time datetime="{{.Format "2006-01-02"}}">{{date .}}</time>{{end}}
-{{define "tags"}}{{with .}}<ul class="tags">{{range .}}<li><a class="tag {{tagClass .}}" href="{{tagPath .}}">#{{.}}</a></li>{{end}}</ul>{{end}}{{end}}
+{{define "tags"}}{{with .}}<ul class="tags">{{range .}}<li><a class="tag" href="{{tagPath .}}"><span>#</span>{{.}}</a></li>{{end}}</ul>{{end}}{{end}}
 {{define "card"}}<article class="card">
     <h2><a href="/posts/{{.Slug}}">{{.Title}}</a></h2>
-    <p class="meta">{{template "date" .Date}} · {{t "min_read" "n" (minutes .Words)}}</p>
+    <p class="meta">{{template "date" .Date}} <span>{{t "min_read" "n" (minutes .Words)}}</span></p>
     {{- with .Description}}<p class="desc">{{.}}</p>{{end}}
     {{- template "tags" .Tags}}
   </article>{{end}}

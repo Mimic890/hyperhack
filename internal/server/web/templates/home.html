@@ -1,4 +1,5 @@
 {{define "title"}}{{.Site.Name}}{{if gt .Page 1}} — {{t "page_of" "n" .Page "m" .Pages}}{{end}}{{end}}
+{{define "searchbutton"}}<a class="search-field" href="/search" title="{{t "search_placeholder"}}" aria-label="{{t "search_placeholder"}}">{{template "searchicon"}}<span>{{t "search_placeholder"}}</span><kbd>Ctrl K</kbd></a>{{end}}
 {{define "main"}}
 {{template "searchform" .}}
 <section aria-labelledby="newest">

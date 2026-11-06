@@ -153,7 +153,7 @@ func newPages(log *slog.Logger, cfg *config.Config, d Deps) *pages {
 	if err != nil {
 		panic(err)
 	}
-	p.css = append(append(css, tagCSS()...), themedChromaCSS()...)
+	p.css = append(css, themedChromaCSS()...)
 	p.cssV = versioned("/static/style.css", p.css)
 	p.scripts = map[string]script{}
 	for _, name := range []string{"search.js", "altcha.js", "post.js"} {
@@ -195,12 +195,11 @@ func funcs(msgs map[string]string, wpm int) template.FuncMap {
 		"date": func(d time.Time) string {
 			return t("date", "day", d.Day(), "month", t("month_"+strconv.Itoa(int(d.Month()))), "year", d.Year())
 		},
-		"minutes":  func(words int) int { return max(1, (words+wpm-1)/wpm) },
-		"asset":    assetPath,
-		"add":      func(a, b int) int { return a + b },
-		"tagClass": tagClass,
-		"tagPath":  tagPath,
-		"pageURL":  pageURL,
+		"minutes": func(words int) int { return max(1, (words+wpm-1)/wpm) },
+		"asset":   assetPath,
+		"add":     func(a, b int) int { return a + b },
+		"tagPath": tagPath,
+		"pageURL": pageURL,
 	}
 }
 

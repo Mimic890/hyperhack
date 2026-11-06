@@ -181,7 +181,7 @@ Rules:
 - Unknown fields are ignored, so Obsidian can add its own.
 - Images: standard Markdown, `![Alt text](assets/photo.webp)`. A path `assets/…` becomes `/assets/…` on the site. External images are blocked by the CSP.
 - Allowed asset types: `png jpg jpeg webp avif gif svg mp4 webm`.
-- `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon.
+- `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon. In the top bar it fits a 40×29 px box.
 
 ## Publishing from Obsidian
 
