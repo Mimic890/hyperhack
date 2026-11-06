@@ -44,7 +44,7 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 | Frontend | Server-side rendering with `html/template`. No framework. Minimal vanilla JS: votes, ALTCHA, view and time beacon. |
 | Themes | Light and dark, toggle in the top bar. System theme by default until the visitor picks one. The choice is stored in a cookie and rendered on the server (no inline JS). The toggle is a form that posts to `/prefs`, so it works without JS. |
 | Design | Beautiful, minimal, responsive. Designed during implementation. Fonts: Inter (text) and JetBrains Mono (code), OFL, self-hosted, Latin + Cyrillic subsets. |
-| Languages | Code, docs, UI: English. UI also in Russian. Default: `DEFAULT_LANG` (`en` / `ru`) in `.env`. Visitor switch in the top bar; the choice is stored in a cookie (the server must know it to render the page). Post text is not translated. |
+| Languages | Code, docs, UI: English. UI also in Russian. Default: `DEFAULT_LANG` (`en` / `ru`) in `.env`. Visitor dropdown in the top bar; the choice is stored in a cookie (the server must know it to render the page). Post text is not translated. |
 | Storage | Garage (S3 API), path-style addressing. Client: `github.com/minio/minio-go/v7`. |
 | Post format | One `.md` = one post. Metadata: Obsidian properties (YAML frontmatter). |
 | Metrics | Prometheus text format on `/metrics`, scraped by VictoriaMetrics, Grafana dashboard. |
@@ -59,7 +59,7 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 - Top bar, left to right:
   - Logo, then site name.
   - Center: empty.
-  - Right: theme toggle, language switch (`en` / `ru`), RSS link, author's GitHub link (URL from `.env`).
+  - Right: theme toggle, language dropdown (`en` / `ru`), RSS link, author's GitHub link (URL from `.env`).
 - Search.
 - Newest posts.
 - Popular posts (by view count).
@@ -620,3 +620,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-04 — Production Compose: image registry GHCR (confirmed). `docker-compose.yml` only pulls the released image, no `build:`, pinned to the latest release (`0.1.0`; image tags are the git tag without `v`). Local builds in `compose.dev.yml`, used only with `-f`; no `docker-compose.override.yml`. README Quick start uses the downloaded `docker-compose.yml` as is, and README documents upgrades and rollback.
 - 2026-11-04 — Post cover as a full-width banner between the top bar and the text column: height `min(30vh, 320px)` (`min(25vh, 200px)` on screens up to 30rem), `object-fit: cover` centered, no rounded corners, `width`/`height` kept. Rendered from a `banner` block in the layout, outside `<main>`. Posts without cover unchanged.
 - 2026-11-04 — Favicon: every page has `<link rel="icon" type="image/svg+xml">` pointing to `/assets/logo.svg` when the bucket has it, else to `/favicon.ico`. `GET /favicon.ico` serves the built-in mark as SVG (accent background, white mark, fixed colors), or answers `302` to `/assets/logo.svg` when the logo exists; `Cache-Control: max-age=3600`, since the logo can change with any sync. Never `404`.
+- 2026-11-06 — Language switch as a dropdown: the top bar shows the current language, its menu lists English and Русский. A native `popover`, placed with CSS anchor positioning, so it opens and closes without JS; the menu buttons still post the `/prefs` form. Without `popover` support the buttons show inline.
