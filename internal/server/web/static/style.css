@@ -95,18 +95,27 @@ img { max-width: 100%; height: auto; }
 .logo { display: block; flex: none; border-radius: 8px; }
 svg.logo { color: var(--text); }
 svg.logo path { stroke: var(--bg); }
-.tools, .prefs, .langs { display: flex; align-items: center; gap: 0.25rem; }
+.tools, .prefs { display: flex; align-items: center; gap: 0.25rem; }
 .prefs { margin: 0; }
-.langs { margin: 0 0.25rem; padding: 2px; border: 1px solid var(--border); border-radius: 999px; }
 .tools button, .tools .icon {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 2.25rem; height: 2.25rem; padding: 0 0.5rem;
   border: 0; border-radius: 999px; background: transparent; color: var(--muted);
   font: inherit; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; text-decoration: none;
 }
-.langs button { height: 1.875rem; min-width: 2.5rem; }
 .tools button:hover, .tools .icon:hover { color: var(--text); background: var(--surface); }
-.langs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+
+/* Language menu: a native popover, so it opens and closes without JS. No display here: it would show the menu while closed. */
+.tools .lang-toggle { gap: 0.2rem; text-transform: uppercase; }
+.lang-toggle { anchor-name: --lang-toggle; }
+.lang-menu {
+  position-anchor: --lang-toggle; inset: auto; top: anchor(bottom); right: anchor(right); position-try-fallbacks: flip-inline;
+  margin: 0.25rem 0 0; padding: 0.25rem; min-width: 7rem;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.16);
+}
+.tools .lang-menu button { display: flex; justify-content: flex-start; width: 100%; padding: 0 0.625rem; border-radius: 6px; font-size: 0.875rem; font-weight: 500; letter-spacing: 0; }
+.tools .lang-menu button[aria-current="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
 /* One theme button is shown: the one that switches away from the current theme. */
 .to-light { display: none !important; }

@@ -122,7 +122,7 @@ func TestHome(t *testing.T) {
 	}
 	mustContain(t, body, `<html lang="en">`, "Test &lt;Blog&gt;", `href="/posts/post-d"`, "Post D", "Post C",
 		`<time datetime="2026-11-04">November 4, 2026</time>`, "3 min read", "Page 1 of 3", `href="/?page=2"`,
-		`<svg class="logo"`, `name="back" value="/"`, `aria-pressed="true">EN`)
+		`<svg class="logo"`, `name="back" value="/"`, `popovertarget="lang-menu"`, `aria-current="true">English`)
 	if strings.Contains(body, "Post B") || strings.Contains(body, "github") {
 		t.Error("page 1 shows too much")
 	}
@@ -177,7 +177,7 @@ func TestPost(t *testing.T) {
 func TestCookies(t *testing.T) {
 	s := newSite(t, testConfig(), testIndex(1))
 	body := s.get("/", &http.Cookie{Name: "lang", Value: "ru"}, &http.Cookie{Name: "theme", Value: "dark"}).Body.String()
-	mustContain(t, body, `<html lang="ru" data-theme="dark">`, `content="dark"`, "Новые", "1 ноября 2026", "3 мин чтения", `aria-pressed="true">RU`)
+	mustContain(t, body, `<html lang="ru" data-theme="dark">`, `content="dark"`, "Новые", "1 ноября 2026", "3 мин чтения", `aria-label="Язык: ru"`, `aria-current="true">Русский`)
 
 	body = s.get("/", &http.Cookie{Name: "lang", Value: "de"}, &http.Cookie{Name: "theme", Value: `"><script>`}).Body.String()
 	mustContain(t, body, `<html lang="en">`, `content="light dark"`, "Newest")
