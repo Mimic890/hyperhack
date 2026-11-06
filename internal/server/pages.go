@@ -71,6 +71,7 @@ type pageData struct {
 	HiddenH1               bool
 
 	Post   *content.Post
+	Older  *content.Post // next older post, for the footer card
 	Views  int64
 	Votes  store.Votes
 	MyVote int // store.Like, store.Dislike or store.None
@@ -552,6 +553,7 @@ func (p *pages) post(w http.ResponseWriter, r *http.Request) {
 	}
 	d := p.data(r)
 	d.Post = post
+	d.Older = ix.Older(post)
 	d.DocLang = post.Lang
 	d.OGType = "article"
 	d.Desc = post.Description
