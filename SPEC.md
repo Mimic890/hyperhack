@@ -41,9 +41,9 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 |---|---|
 | Users | One author. No registration. Public side is read-only. |
 | Backend | Go 1.27, latest stable (go1.27.3 on 2026-11-03). `go.mod`: `go 1.27` + `toolchain go1.27.3`. Builder image: `golang:1.27`. Check go.dev/dl before starting; Dependabot keeps it current. |
-| Frontend | Server-side rendering with `html/template`. No framework. Minimal vanilla JS: votes, ALTCHA, view and time beacon. |
+| Frontend | Server-side rendering with `html/template`. No framework. Minimal vanilla JS: votes, ALTCHA, view and time beacon, search palette, table of contents, copy and share buttons, post transitions. |
 | Themes | Light and dark, toggle in the top bar. System theme by default until the visitor picks one. The choice is stored in a cookie and rendered on the server (no inline JS). The toggle is a form that posts to `/prefs`, so it works without JS. |
-| Design | Beautiful, minimal, responsive. Designed during implementation. Fonts: Inter (text) and JetBrains Mono (code), OFL, self-hosted, Latin + Cyrillic subsets. |
+| Design | See Design. Fonts: Onest (text) and JetBrains Mono (code and heading markers), OFL, self-hosted, Latin + Cyrillic subsets. |
 | Languages | Code, docs, UI: English. UI also in Russian. Default: `DEFAULT_LANG` (`en` / `ru`) in `.env`. Visitor dropdown in the top bar; the choice is stored in a cookie (the server must know it to render the page). Post text is not translated. |
 | Storage | Garage (S3 API), path-style addressing. Client: `github.com/minio/minio-go/v7`. |
 | Post format | One `.md` = one post. Metadata: Obsidian properties (YAML frontmatter). |
@@ -52,25 +52,127 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 | Deployment | Docker + Docker Compose. Image built by GitHub Actions. |
 | Repository | Public, GitHub. License AGPL-3.0 (the author adds it when creating the repo). |
 
+## Design
+
+Applies to every page. Pages work without JS; JS only improves them.
+
+### Colors
+
+CSS custom properties. The theme mechanism does not change: `prefers-color-scheme`, cookie, `data-theme`.
+
+| Token | Dark | Light | Role |
+|---|---|---|---|
+| `--bg` | `#101119` | `#F6F5FB` | page background |
+| `--raise` | `#171925` | `#FFFFFF` | cards, code, menus |
+| `--line` | `#262938` | `#E2E0EE` | borders, dividers |
+| `--text` | `#E7E5F2` | `#1B1930` | main text |
+| `--muted` | `#9C99B3` | `#5D5A75` | metadata, captions |
+| `--uv` | `#8B6CFF` | `#5B3DE6` | accent: links, `#`, active states |
+| `--ember` | `#FF8F57` | `#B9541F` | second accent: "New post", gradient end |
+| `--uv-soft` | `rgba(139,108,255,.14)` | `rgba(91,61,230,.10)` | background of active elements |
+
+- The `--uv` → `--ember` gradient appears only in the reading progress bar.
+- Text contrast is at least 4.5:1, checked in a test.
+- Text on `--uv-soft` is always `--text`. There `--uv` is only for icons and borders: as text it stays below 4.5:1 in the dark theme.
+- `--ember` text goes only on `--raise`: on `--bg` it stays below 4.5:1 in the light theme.
+
+### Typography
+
+- Text: Onest (OFL, Latin + Cyrillic), variable `woff2`, normal style, self-hosted in `static/fonts/` with `OFL-Onest.txt`.
+- JetBrains Mono only for code and heading markers.
+- Body 17px / 1.65, post text 18px / 1.72.
+- Post title 54px / 1.05 / 800, letter-spacing −0.04em; 34px at ≤ 640px.
+- Post h2 29px / 750, h3 22px / 700.
+- No all-caps captions. Metadata is separated with `gap`, not with `·`.
+
+### Shape and size
+
+- Radius: cards 20px, code and callouts 14px, buttons 12px, chips `999px`.
+- Minimum touch target 44px.
+- Container `max-width: 1180px`, side padding 32px (16px at ≤ 640px).
+
+### Motion
+
+Everything is inside `@media (prefers-reduced-motion: no-preference)`. New CSS features go through `@supports`; without them the page still looks right.
+
+1. List → post: `@view-transition { navigation: auto; }` on all pages. The title and the cover share a `view-transition-name` from the slug between the list and the post, 280ms. CSP forbids inline styles, so a small script sets the names through the CSSOM on `pageswap` and `pagereveal`. Without JS or these events there is a normal page transition.
+2. Reading progress on post pages: a 2px bar at the bottom of the top bar, gradient `--uv` → `--ember`, `animation-timeline: scroll(root)`.
+3. Search palette: backdrop 120ms, window from `scale(.98)` and `opacity: 0` in 160ms.
+4. Like: `scale(.94)` on press, the number moves from bottom to top when it changes.
+5. Language menu: appears in 120ms.
+
+No other animations on load or on card hover.
+
+### Responsive layout and accessibility
+
+- Checked at widths 375, 768, 1280 and 1440.
+- Visible `:focus-visible` on all interactive elements.
+- Icons without text have `aria-label`.
+- `aria-current`, `aria-expanded` and `aria-pressed` wherever there is state.
+
 ## Pages
+
+### Top bar
+
+- On all pages. Height 72px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
+- Left: logo in a 40×29px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
+- On post pages at ≥ 1000px: the post title next to the logo, `--muted`, cut with `ellipsis`.
+- Right, left to right: search button, theme toggle, language dropdown (`en` / `ru`), RSS link, author's GitHub link (URL from `.env`).
+- Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
+- Language dropdown: a borderless button `RU ▾`, menu on `--raise`, radius 14px, shadow, active language in `--uv`.
 
 ### Main page
 
-- Top bar, left to right:
-  - Logo, then site name.
-  - Center: empty.
-  - Right: theme toggle, language dropdown (`en` / `ru`), RSS link, author's GitHub link (URL from `.env`).
-- Search.
-- Newest posts.
-- Popular posts (by view count).
+Built from blocks listed in `home.md`, a file in the vault root. The name is reserved: this file is not a post and stays out of the index, search, RSS, sitemap, `/llms.txt` and `/posts/<slug>.md`. A `home.md` in a subfolder is an ordinary post candidate. The name has no `_` because Remotely Save does not sync such files.
+
+The file holds only YAML frontmatter with a `blocks` list; its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
+
+```yaml
+---
+blocks:
+  - type: intro
+    title: Long posts about self-hosting and Go.
+    text: Notes from running my own infrastructure.
+  - type: tags
+    limit: 6
+  - type: featured
+  - type: posts
+    group: year
+  - type: popular
+    limit: 4
+    area: side
+---
+```
+
+| `type` | Fields | Shows |
+|---|---|---|
+| `intro` | `title`, `text` (both optional) | Heading 46px / 800 and `--muted` subtitle, width ≤ 720px. Without both fields it renders nothing. |
+| `tags` | `limit` (1–20, default 6) | Chip "All posts" and the most used tags: by number of published posts, ties by name. Each chip: `#` in `--uv`, name, post count in `--muted`. |
+| `featured` | none | The latest post. Card on `--raise` with a border, radius 20px, padding 20px. Left: cover at 1/4 width (`4/3`, radius 14px). Right: "New post" in `--ember`, title 30px, description, date, reading time, tags. No cover: text at full width. |
+| `posts` | `group: year \| none` (default `none`), `limit` (1–100, default `PAGE_SIZE`) | Post list with pagination. Row: date on the left (92px), title 21px / 650 with `--muted` description, reading time on the right. With `year`: year headings 40px / 800 with the year's post count in this list, and dates without the year. |
+| `popular` | `limit` (1–10, default 4) | Numbered list (1, 2, 3…) with views in the `POPULAR_DAYS` window. At the bottom: link "Subscribe via RSS". |
+
+- `area: main | side` on any block, default `main`. `side` is a right column of 300px at ≥ 860px; below that, side blocks go after the main ones.
+- Text fields are a string or a map by language: `title: {ru: "…", en: "…"}`. Language keys are two lower-case letters. No entry for the UI language: the first one in the file.
+- Plain text only, escaped by the template. `title` ≤ 200 characters, `text` ≤ 500. At most 20 blocks; the rest are ignored with WARN.
+- No `home.md`, invalid YAML or no `blocks` → default set: the example above without `intro` text, and WARN.
+- Unknown `type` or invalid field → the block is skipped, WARN.
+- WARNs repeat only when the file changes, not on every poll.
+- Only the first `posts` block is used, since a page has one pagination; others are skipped with WARN.
+- The `featured` post does not repeat in `posts`, on any page.
+- Page 2+ shows only the `posts` block and pagination. Without a `posts` block, `/?page=2` is `404`.
+- One `h1` per page: the `intro` title, else the site name, visually hidden.
 
 ### Post page
 
 - Markdown from S3 rendered to HTML.
-- Cover (`cover`), if set: a banner above the title, right under the top bar, full page width (not the text column). Fixed height `min(30vh, 320px)`, `min(25vh, 200px)` on narrow screens; `object-fit: cover`, centered; no rounded corners. Title, dates and tags stay below it in the text column. The `<img>` keeps `width`/`height`. No cover: no banner.
-- Estimated reading time.
-- View count.
-- Likes and dislikes.
+- Banner: the cover (`cover`) above the title at full window width, height `min(48vh, 460px)`, 260px at ≤ 640px, `object-fit: cover`, no rounded corners. Its lower part fades into `--bg`: a gradient `transparent 30%` → `--bg 100%` over the image, and `backdrop-filter: blur(14px)` under the mask `linear-gradient(to bottom, transparent, #000 70%)` in the lower 45%. The `<img>` keeps `width`/`height`. No cover: no banner.
+- Post header: aligned to the left edge of the text column, overlaps the banner by 150px (100px at < 1000px); no overlap without a banner. Order: tags, title, metadata (date, `updated` if set, reading time, views).
+- Grid: text (`max-width: 680px`) on the left, table of contents 250px on the right, gap 80px. Below 1000px the contents move into `<details>` "Contents" above the text.
+- Table of contents: built on the server from h2–h4, which already have ids. A tree: h3 indented 30px, h4 46px with a smaller font. Each item has a 2px `--line` line on its left. Active item: `--text`, `--uv` line, weight 600; its parent h2 is `--text` too. The column is `position: sticky; top: 96px`. `post.js` marks the active item with `IntersectionObserver`. No headings: no contents.
+- Heading markers: `##` hangs in the margin left of h2 and `###` left of h3. CSS `::before`, not text; JetBrains Mono, `--uv`, opacity 0.6 and 0.45. Brighter on hover; a click copies the link to the section (JS). None below 1000px.
+- Code blocks and callouts: see Content features.
+- Post footer: "Was this post helpful?", like, dislike. On the right, "Share": `navigator.share()` with title and URL when available, otherwise copies the URL and says "Link copied" in `role="status"`. No button without JS. Below, two cards: "Previous post" (the next older one, if any) and "All posts".
 
 ## Configuration
 
@@ -94,8 +196,8 @@ Proposed variables (final names set during implementation):
 | `DATA_DIR` | Directory for SQLite (`hyperhack.db`). Default: `/data`. |
 | `VAULT_DIR` | Directory for the local bucket mirror. Default: `/vault`. |
 | `RATE_LIMIT_VOTE`, `RATE_LIMIT_BEACON`, `RATE_LIMIT_REINDEX` | Per-client limits on write endpoints. Defaults: `10/1m`, `30/1m`, `5/1m`. |
-| `POPULAR_DAYS`, `POPULAR_LIMIT` | "Popular" window and size. Defaults: `30`, `5`. |
-| `PAGE_SIZE` | Posts per page in "Newest" and tag pages. Default: `10`. |
+| `POPULAR_DAYS` | "Popular" window. Default: `30`. The list size is the `limit` of the `popular` block. |
+| `PAGE_SIZE` | Posts per page in the `posts` block (unless its `limit` is set) and tag pages. Default: `10`. |
 | `RSS_LIMIT` | Posts in the RSS feed. Default: `20`. |
 | `DEFAULT_OG_IMAGE` | Optional. Preview image for pages and posts without `cover`: a file inside `assets/`, same rules as `cover`. |
 | `INDEXNOW_KEY` | Optional. Enables IndexNow pings. 8–128 characters `a-z A-Z 0-9 -`. Served at `/<INDEXNOW_KEY>.txt`. |
@@ -121,11 +223,12 @@ Proposed variables (final names set during implementation):
 
 - `assets/` — all assets: covers, images in posts. Decided.
 - `assets/logo.svg` — optional site logo in the top bar and favicon. Without it the service shows a built-in mark.
+- `home.md` — optional main page blocks, in the root only (see Pages → Main page).
 - The service ignores keys where any path segment starts with `.` or `_` (same rule as Remotely Save).
 
 ### Posts
 
-- Every `.md` file in the vault is a post candidate, at any depth, except `assets/` and ignored paths (`.` / `_`).
+- Every `.md` file in the vault is a post candidate, at any depth, except `assets/`, ignored paths (`.` / `_`) and `home.md` in the root.
 - Folders are for the author only. They do not affect the URL.
 - URL: `/posts/<slug>`. The slug comes from frontmatter or the file name, so moving a file does not break links.
 - No numbering. Order comes from `date`.
@@ -279,6 +382,13 @@ The service stores per-post metrics only. Storage: SQLite.
 
 - Server-side at render time: `github.com/yuin/goldmark` + `github.com/yuin/goldmark-highlighting/v2` (chroma v2). No JS.
 - CSS classes, not inline styles (`chromahtml.WithClasses`), so light and dark themes each get their own palette.
+- Header 44px above each block: language on the left in `--muted` (empty if not set), "Copy" button on the right. After a click: a check mark and "Copied" for 1.5 s. The button appears only with JS.
+
+### Callouts
+
+- Obsidian syntax: `> [!note]`, `> [!tip]`, `> [!warning]`, case-insensitive, with an optional title after the type. Parsed by the renderer. Any other type stays a plain blockquote.
+- Block on `--uv-soft`, radius 14px, icon and type title, no colored left stripe. Icons come from CSS.
+- Default titles follow the post `lang`, since post HTML is rendered once: Russian for `ru`, English otherwise.
 
 ### Search
 
@@ -289,22 +399,28 @@ Goal: the best search possible without an extra service.
 - Fields and weight: `title` > `tags` > `description` > body.
 - Typo tolerance (fuzzy match), prefix match for search-as-you-type.
 - Result snippets with highlighted matches.
-- Works without JS: `GET /search?q=…` renders results. With JS: results update while typing.
-- Filter by tag.
+- Works without JS: `GET /search?q=…` renders results.
+- With JS: `Ctrl K`, `Cmd K` and `/` open a palette, a `<dialog>` of 660px, centered, 110px from the top, with a dimmed backdrop. Results update while typing, from `/search`.
+- Tag filter inside the query: `#self-host garage`. The server takes `#tag` tokens from `q` and filters by them, several tags mean AND. A query of tags only lists their posts by date. A token with invalid tag syntax is ignored. The `tag` parameter stays for old links. The search form has no tag dropdown.
+- While a `#` token is being typed, the palette shows tag suggestions with post counts instead of results. A click or `Enter` completes the tag and adds a space. Chosen tags appear as chips under the field.
+- Tags with counts come as `<script type="application/json">` in the page; no new endpoint.
+- Palette footer: `#tag` filters by tag, `↑ ↓` select, `Enter` opens, `Esc` closes.
+- A match in a title is underlined and colored `--uv`.
+- No results: "Nothing found for “…”. Check the word or remove #tag from the query."
 - The results page has `noindex`.
 
 Rejected: Meilisearch and similar. Better typo handling, but a separate service.
 
 ### Popular and Newest
 
-- "Popular": most views in the last `POPULAR_DAYS` days, top `POPULAR_LIMIT`.
-- "Newest": by `date`, `PAGE_SIZE` per page, with pagination.
+- "Popular": most views in the last `POPULAR_DAYS` days, top `limit` of the `popular` block.
+- "Newest": by `date`, the `posts` block, with pagination.
 
 ### Tags
 
 - Page `/tags/<tag>`: posts with this tag, paginated.
-- Each tag has its own color. The color is computed from a hash of the tag name, so it is stable without config.
-- Colors are tuned per theme to keep text contrast at WCAG AA.
+- Tag pages use the same post rows as the `posts` block.
+- All tags look the same: `#` in `--uv`, then the name. No per-tag colors.
 
 ### RSS
 
@@ -340,7 +456,7 @@ All private: metrics only, not shown on the site. Collected by the same client s
 | Read depth: share of readers who reach 25 / 50 / 75 / 100 % of the text | script (`IntersectionObserver` on markers) | Do readers finish the post? |
 | Traffic source per post: `telegram`, `google`, `yandex`, `bing`, `github`, `direct`, `internal` (from this site), `other` | script (`document.referrer` domain, mapped to a fixed list) | Where readers come from. |
 | Outbound link clicks per post (target domain) | script | Which links readers use. |
-| Code copies per post | script (`copy` event inside code blocks) | Which code is useful. |
+| Code copies per post | script (`copy` event inside code blocks, "Copy" button) | Which code is useful. |
 | Device class: `mobile` / `tablet` / `desktop` | script (viewport width bucket) | Layout priorities. |
 | UI language and theme chosen | script | Which language and theme readers use. |
 | Votes per day per post | server | Vote trends. |
@@ -434,14 +550,14 @@ Other methods → `405`. Unknown paths → `404`.
 - Slug must exist in the current index. Unknown slug → `404`, nothing stored. This also bounds metric labels.
 - Numbers are clamped: time on page 0–4 h; read depth only 0 / 25 / 50 / 75 / 100.
 - Enums only: vote (`like` / `dislike` / `none`), source, device, theme, lang. Other values → `400`.
-- Search query: max 200 chars, max 10 terms. The query is built in code (match + fuzzy + prefix), never from Bleve query-string syntax: this blocks regex and wildcard DoS. Fuzziness ≤ 2, prefix min 2 chars. Page number bounded.
+- Search query: max 200 chars, max 10 terms, `#tag` tokens included. The query is built in code (match + fuzzy + prefix), never from Bleve query-string syntax: this blocks regex and wildcard DoS. Fuzziness ≤ 2, prefix min 2 chars. Page number bounded.
 - Cookies `lang` and `theme`: enum check; invalid → default.
 
 ### Output and XSS
 
 - All HTML through `html/template` (context-aware escaping). Templates parsed at startup.
 - Markdown: goldmark with GFM (tables, strikethrough, autolinks), without `WithUnsafe`. By default goldmark does not render raw HTML or dangerous URLs.
-- Defense in depth: post HTML passes `bluemonday` (UGC policy + chroma classes + heading ids).
+- Defense in depth: post HTML passes `bluemonday` (UGC policy + chroma classes + heading ids + callout and code block classes).
 - External links get `rel="noopener noreferrer"`.
 - Images only from `assets/`. External images are blocked by CSP (also keeps reader IPs private).
 - JSON-LD from `json.Marshal` (escapes `<`, `>`, `&`).
@@ -452,7 +568,7 @@ Other methods → `405`. Unknown paths → `404`.
 ### Security headers (set by the service)
 
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests`. Add `blob:` to `worker-src` only if the ALTCHA build needs it.
-- No inline scripts or styles. Theme and language come from cookies and are rendered on the server, so no inline script is needed against a theme flash.
+- No inline scripts or styles. Theme and language come from cookies and are rendered on the server, so no inline script is needed against a theme flash. `<script type="application/json">` is a data block that does not run, so the CSP does not change.
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()`.
 - All JS, CSS, fonts and the ALTCHA solver are self-hosted. No CDN, no third-party requests.
 
@@ -621,3 +737,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-04 — Post cover as a full-width banner between the top bar and the text column: height `min(30vh, 320px)` (`min(25vh, 200px)` on screens up to 30rem), `object-fit: cover` centered, no rounded corners, `width`/`height` kept. Rendered from a `banner` block in the layout, outside `<main>`. Posts without cover unchanged.
 - 2026-11-04 — Favicon: every page has `<link rel="icon" type="image/svg+xml">` pointing to `/assets/logo.svg` when the bucket has it, else to `/favicon.ico`. `GET /favicon.ico` serves the built-in mark as SVG (accent background, white mark, fixed colors), or answers `302` to `/assets/logo.svg` when the logo exists; `Cache-Control: max-age=3600`, since the logo can change with any sync. Never `404`.
 - 2026-11-06 — Language switch as a dropdown: the top bar shows the current language, its menu lists English and Русский. A native `popover`, placed with CSS anchor positioning, so it opens and closes without JS; the menu buttons still post the `/prefs` form. Without `popover` support the buttons show inline.
+- 2026-11-06 — Redesign. New tokens (`--uv`, `--ember`, `--uv-soft`…), font Onest instead of Inter, sticky 72px top bar; at ≤ 640px the site name is hidden so the bar fits one row. Text on `--uv-soft` is `--text`, because `--uv` text stays below 4.5:1 there in the dark theme. Hash colors for tags removed. Main page built from blocks in `home.md`, a reserved name in the vault root; default set without author text; `POPULAR_LIMIT` removed in favor of the `limit` of the `popular` block; only the first `posts` block is used. Post page: banner `min(48vh, 460px)`, server-built table of contents, heading markers, code block header, Obsidian callouts (`note`, `tip`, `warning`), "Share", "Previous post". Code copies also count the "Copy" button. Search palette on `Ctrl K`, `Cmd K` and `/`; `#tag` tokens in `q` (AND), counted in the 10-term limit; tag dropdown removed, the `tag` parameter stays. Motion only under `prefers-reduced-motion: no-preference`; CSP forbids inline styles, so a script sets `view-transition-name` through the CSSOM. No new endpoints.
