@@ -56,6 +56,8 @@ type pageData struct {
 
 	JS []string // versioned script URLs for this page
 
+	TagData template.JS // tags with post counts for the search palette, from json.Marshal
+
 	// <head> metadata. Desc, Canonical and Image are absolute or empty.
 	Desc, Canonical, Image string
 	OGType                 string // "website" or "article"
@@ -316,6 +318,7 @@ func (p *pages) data(r *http.Request) pageData {
 		CSS:    p.cssV,
 		Site:   site{Name: p.cfg.SiteName, GitHub: p.cfg.GitHubURL},
 		OGType: "website",
+		JS:     []string{p.scripts["search.js"].url},
 	}
 	if p.cfg.DefaultOGImage != "" {
 		d.Image = p.abs(assetPath(p.cfg.DefaultOGImage))
@@ -329,6 +332,9 @@ func (p *pages) data(r *http.Request) pageData {
 	d.DocLang = d.Lang
 	if ix := p.index(); ix != nil {
 		d.Site.Logo = ix.Logo
+		if b, err := json.Marshal(ix.TopTags(len(ix.Tags()))); err == nil { // json.Marshal escapes <, > and &
+			d.TagData = template.JS(b)
+		}
 	}
 	return d
 }
@@ -494,7 +500,7 @@ func (p *pages) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := p.data(r)
-	d.NoIndex, d.JS = true, []string{p.scripts["search.js"].url}
+	d.NoIndex = true
 	q := r.URL.Query()
 	d.Query = q.Get("q")
 	if t := q.Get("tag"); slices.Contains(ix.Tags(), t) {

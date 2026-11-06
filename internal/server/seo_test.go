@@ -259,3 +259,35 @@ func TestSearchTags(t *testing.T) {
 		}
 	})
 }
+
+func TestPaletteOnEveryPage(t *testing.T) {
+	s := seoSite(t)
+	for _, path := range []string{"/", "/posts/zametka", "/search", "/tags/go", "/nope"} {
+		body := s.get(path).Body.String()
+		mustContain(t, body, `<dialog class="palette" id="palette"`, `<script src="/static/search.js?v=`,
+			`role="combobox"`, `aria-controls="palette-list"`, `id="palette-list" role="listbox"`,
+			"filters by tag", "<kbd>↑ ↓</kbd>", "<kbd>Enter</kbd>", "<kbd>Esc</kbd>",
+			`<script type="application/json" id="tag-data">[{"Name":"go","Posts":2},{"Name":"dev/tools","Posts":1},{"Name":"заметки","Posts":1}]</script>`)
+		if strings.Contains(body, "<dialog class=\"palette\" id=\"palette\" lang=\"en\" open") {
+			t.Errorf("%s: palette open", path)
+		}
+	}
+	// The script is not listed twice on the post page, and the post scripts stay.
+	post := s.get("/posts/zametka").Body.String()
+	if strings.Count(post, `src="/static/search.js`) != 1 {
+		t.Error("search.js listed twice")
+	}
+	mustContain(t, post, `src="/static/altcha.js`, `src="/static/post.js`)
+	mustContain(t, s.get("/", &http.Cookie{Name: "lang", Value: "ru"}).Body.String(), "<kbd>#тег</kbd> фильтр по тегу", "выбрать", "открыть", "закрыть")
+}
+
+func TestTagDataEscaped(t *testing.T) {
+	// Tags cannot hold these characters; the JSON stays safe in a script element anyway.
+	b, err := json.Marshal([]content.TagCount{{Name: "</script><b>&", Posts: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(string(b), "<>&") {
+		t.Errorf("not escaped: %s", b)
+	}
+}
