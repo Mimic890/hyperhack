@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -111,5 +112,21 @@ func TestPostMarkupInFeed(t *testing.T) {
 	mustContain(t, body, "callout-title", "code-block")
 	if strings.Contains(body, "copy") {
 		t.Error("Copy button in the feed")
+	}
+}
+
+func TestMotionMarkup(t *testing.T) {
+	s := postSite(t)
+	for _, path := range []string{"/", "/posts/full", "/search", "/tags/go", "/nope"} {
+		body := s.get(path).Body.String()
+		// Blocking and before the body: pagereveal fires before the first frame.
+		script := regexp.MustCompile(`<script src="/static/transition\.js\?v=[^"]+"></script>`)
+		if loc := script.FindStringIndex(body); loc == nil || loc[0] > strings.Index(body, "</head>") {
+			t.Errorf("%s: no blocking transition script in <head>", path)
+		}
+		mustContain(t, body, `<link rel="expect" href="#main" blocking="render">`, `<main id="main">`)
+		if got := strings.Contains(body, `class="progress"`); got != (path == "/posts/full") {
+			t.Errorf("%s: reading progress = %v", path, got)
+		}
 	}
 }

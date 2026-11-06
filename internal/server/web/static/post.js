@@ -33,7 +33,14 @@
           const res = await r2.json();
           buttons.forEach((b) => {
             b.setAttribute("aria-pressed", String(b.dataset.vote === res.vote));
-            b.querySelector(".n").textContent = b.dataset.vote === "like" ? res.likes : res.dislikes;
+            const n = b.querySelector(".n");
+            const value = String(b.dataset.vote === "like" ? res.likes : res.dislikes);
+            if (n.textContent === value) return;
+            n.textContent = value;
+            // The motion rules animate .changed; the reflow restarts it on a second change.
+            n.classList.remove("changed");
+            void n.offsetWidth;
+            n.classList.add("changed");
           });
         } catch {
           status.textContent = votes.dataset.error;

@@ -35,6 +35,8 @@
 {{- end}}
 <link rel="icon" type="image/svg+xml" href="{{if .Site.Logo}}/assets/logo.svg{{else}}/favicon.ico{{end}}">
 <link rel="stylesheet" href="{{.CSS}}">
+<link rel="expect" href="#main" blocking="render">
+<script src="{{.TransitionJS}}"></script>
 {{- range .JS}}
 <script src="{{.}}" defer></script>
 {{- end}}
@@ -49,6 +51,7 @@
   </a>
   {{- with .Post}}
   <span class="bar-title" aria-hidden="true">{{.Title}}</span>
+  <span class="progress" aria-hidden="true"></span>
   {{- end}}
   <nav class="tools" aria-label="{{t "settings"}}">
     {{block "searchbutton" .}}<a class="icon" href="/search" title="{{t "search_placeholder"}}" aria-label="{{t "search_placeholder"}}">{{template "searchicon"}}</a>{{end}}

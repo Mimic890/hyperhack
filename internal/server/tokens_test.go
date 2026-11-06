@@ -122,3 +122,41 @@ func TestCSSFontsExist(t *testing.T) {
 		}
 	}
 }
+
+// SPEC → Motion: everything is inside the reduced-motion query.
+func TestMotionGated(t *testing.T) {
+	b, err := webFS.ReadFile("web/static/style.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(b)
+	const open = "@media (prefers-reduced-motion: no-preference) {"
+	if strings.Count(css, open) != 1 {
+		t.Fatalf("want one motion block, got %d", strings.Count(css, open))
+	}
+	start := strings.Index(css, open)
+	end, depth := start+len(open), 1
+	for ; depth > 0; end++ {
+		switch css[end] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+		}
+	}
+	block, rest := css[start:end], css[:start]+css[end:]
+	for _, word := range []string{"animation", "transition", "@keyframes", " scroll-behavior:"} {
+		if strings.Contains(rest, word) {
+			t.Errorf("%s outside the motion block", word)
+		}
+		if !strings.Contains(block, word) {
+			t.Errorf("%s missing from the motion block", word)
+		}
+	}
+	// Timings from the SPEC.
+	for _, want := range []string{"@view-transition { navigation: auto; }", "animation-duration: 280ms", "palette-in 160ms", "fade-in 120ms", "scale(0.98)", "scale(0.94)", "animation-timeline: scroll(root)", "@supports (animation-timeline: scroll())"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+}
