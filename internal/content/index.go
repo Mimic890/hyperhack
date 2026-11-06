@@ -75,5 +75,13 @@ func (ix *Index) TopTags(n int) []TagCount { return ix.counts[:min(n, len(ix.cou
 // Get returns the post with this slug, or nil.
 func (ix *Index) Get(slug string) *Post { return ix.bySlug[slug] }
 
+// Older returns the next older published post, or nil.
+func (ix *Index) Older(p *Post) *Post {
+	if i := slices.Index(ix.posts, p); i >= 0 && i+1 < len(ix.posts) {
+		return ix.posts[i+1]
+	}
+	return nil
+}
+
 // Posts returns published posts, newest first. Callers must not change the slice.
 func (ix *Index) Posts() []*Post { return ix.posts }

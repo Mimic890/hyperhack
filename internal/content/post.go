@@ -19,6 +19,12 @@ import (
 	"github.com/Mimic890/hyperhack/internal/mirror"
 )
 
+// TOCItem is one heading in the table of contents.
+type TOCItem struct {
+	Level     int // 2 to 4
+	ID, Title string
+}
+
 // Post is one published or draft post.
 type Post struct {
 	Key         string // bucket key of the .md file
@@ -35,6 +41,7 @@ type Post struct {
 	Draft       bool
 	Words       int           // body word count, for reading time
 	HTML        template.HTML // sanitized
+	TOC         []TOCItem     // h2-h4 of HTML
 	Text        string        // plain text of HTML, for search
 	Source      []byte        // the raw .md file, served at /posts/<slug>.md
 	Outbound    []string      // hosts of external links: the only allowed outbound-click labels
@@ -140,9 +147,10 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 		}
 	}
 	p.Words = len(bytes.Fields(body))
-	if p.HTML, err = r.render(body); err != nil {
+	if p.HTML, err = r.render(body, p.Lang); err != nil {
 		return nil, fmt.Errorf("render: %w", err)
 	}
+	p.TOC = tableOfContents(string(p.HTML))
 	p.Text = plainText(string(p.HTML))
 	p.Outbound = outboundHosts(string(p.HTML))
 	p.Source = src
@@ -216,6 +224,45 @@ func plainText(s string) string {
 		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
 			if name, _ := z.TagName(); !inlineTags[string(name)] {
 				b.WriteByte(' ') // block boundary: keep words apart
+			}
+		}
+	}
+}
+
+// tableOfContents lists the h2-h4 of rendered post HTML. Headings without text are left out.
+func tableOfContents(s string) []TOCItem {
+	var toc []TOCItem
+	var open string
+	var item TOCItem
+	var title strings.Builder
+	z := html.NewTokenizer(strings.NewReader(s))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			return toc
+		case html.TextToken:
+			if open != "" {
+				title.Write(z.Text())
+			}
+		case html.StartTagToken:
+			tok := z.Token()
+			if tok.Data != "h2" && tok.Data != "h3" && tok.Data != "h4" {
+				continue
+			}
+			open, item = tok.Data, TOCItem{Level: int(tok.Data[1] - '0')}
+			title.Reset()
+			for _, a := range tok.Attr {
+				if a.Key == "id" {
+					item.ID = a.Val
+				}
+			}
+		case html.EndTagToken:
+			if name, _ := z.TagName(); open != "" && string(name) == open {
+				open = ""
+				item.Title = strings.Join(strings.Fields(title.String()), " ")
+				if item.ID != "" && item.Title != "" {
+					toc = append(toc, item)
+				}
 			}
 		}
 	}

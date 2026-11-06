@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -109,7 +110,7 @@ func TestRender(t *testing.T) {
 	src := "# Привет мир\n\n## Привет мир\n\n```go\nfunc main() {}\n```\n\n" +
 		"[ext](https://example.com) [int](/posts/x) [file](assets/doc.png) <https://example.org>\n\n" +
 		"![alt](assets/a%20b.png)\n"
-	got, err := r.render([]byte(src))
+	got, err := r.render([]byte(src), "en")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,6 +156,14 @@ var xssCorpus = []string{
 	"```\n</code></pre><script>alert(1)</script>\n```",
 	"```html\n<script>alert(1)</script>\n```",
 	"`<script>alert(1)</script>`",
+	"```\"><script>alert(1)</script>\ncode\n```",
+	"```go\" onclick=\"alert(1)\ncode\n```",
+	"```<img/src=x/onerror=alert(1)>\ncode\n```",
+	"> [!note] <script>alert(1)</script>\n> <img src=x onerror=alert(1)>",
+	"> [!tip] [x](javascript:alert(1))",
+	"> [!warning] ![x](javascript:alert(1))\n> body",
+	"> [!note\" onclick=\"alert(1)] x",
+	"## <img src=x onerror=alert(1)>",
 	`<!--><script>alert(1)</script>-->`,
 	`<a href="https://example.com" target="_blank" onclick="alert(1)">x</a>`,
 	`<details open ontoggle=alert(1)>`,
@@ -163,13 +172,121 @@ var xssCorpus = []string{
 func TestRenderXSS(t *testing.T) {
 	r := NewRenderer("en")
 	for _, payload := range xssCorpus {
-		got, err := r.render([]byte(payload))
+		got, err := r.render([]byte(payload), "en")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if bad := unsafeHTML(string(got)); bad != "" {
 			t.Errorf("payload %q: %s\n%s", payload, bad, got)
 		}
+	}
+}
+
+func TestCallouts(t *testing.T) {
+	r := NewRenderer("en")
+	for _, c := range []struct{ name, lang, src, want string }{
+		{"default title", "en", "> [!note]\n> Body", `<blockquote class="callout callout-note"><p class="callout-title">Note</p><p>Body</p></blockquote>`},
+		{"russian title", "ru", "> [!tip]\n> Текст", `<blockquote class="callout callout-tip"><p class="callout-title">Совет</p><p>Текст</p></blockquote>`},
+		{"russian warning", "ru", "> [!warning]", `<blockquote class="callout callout-warning"><p class="callout-title">Внимание</p></blockquote>`},
+		{"other language", "de", "> [!note]", `<p class="callout-title">Note</p>`},
+		{"case and title", "en", "> [!WaRnInG] Look out\n> Body", `<blockquote class="callout callout-warning"><p class="callout-title">Look out</p><p>Body</p></blockquote>`},
+		{"inline title", "en", "> [!note] A **b** `c`\n> Body", `<p class="callout-title">A <strong>b</strong> <code>c</code></p><p>Body</p>`},
+		{"markup over two lines loses nothing", "en", "> [!note] **a\n> b** c\n> d", `<p class="callout-title"><strong>a`},
+		{"hard break", "en", "> [!note] Title  \n> Body", `<p class="callout-title">Title</p><p>Body</p>`},
+		{"own paragraph", "en", "> [!tip]\n>\n> Body\n>\n> More", `<p class="callout-title">Tip</p><p>Body</p><p>More</p>`},
+		{"nested", "en", "> [!note]\n> > [!tip]\n> > x", `<blockquote class="callout callout-tip"><p class="callout-title">Tip</p><p>x</p></blockquote></blockquote>`},
+		{"in a list", "en", "- item\n\n  > [!note]\n  > x", `<blockquote class="callout callout-note">`},
+	} {
+		got, err := r.render([]byte(c.src), c.lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s := strings.ReplaceAll(string(got), "\n", ""); !strings.Contains(s, c.want) {
+			t.Errorf("%s: want %s in\n%s", c.name, c.want, got)
+		}
+	}
+	for name, src := range map[string]string{
+		"other type":    "> [!danger] x",
+		"no space":      "> [!note]x",
+		"not first":     "> a\n> [!note] x",
+		"plain":         "> quote",
+		"reference":     "> [!note]\n\n[!note]: /x",
+		"link":          "> [!note](/x)",
+		"not a quote":   "[!note] x",
+		"foldable mark": "> [!note]- x",
+	} {
+		got, err := r.render([]byte(src), "en")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(got), "callout") {
+			t.Errorf("%s: %s", name, got)
+		}
+	}
+	// Nothing is lost when the markup crosses the line.
+	got, _ := r.render([]byte("> [!note] **a\n> b** c\n> d"), "en")
+	if text := plainText(string(got)); text != "a b c d" {
+		t.Errorf("text = %q", text)
+	}
+}
+
+func TestCodeBlockHeader(t *testing.T) {
+	r := NewRenderer("en")
+	for _, c := range []struct{ name, src, want string }{
+		{"highlighted", "```go\nfunc f() {}\n```", `<div class="code-block"><div class="code-head" data-lang="go"></div><pre class="chroma"><code><span class="line">`},
+		{"unknown language", "```nope\n<x>\n```", `<div class="code-block"><div class="code-head" data-lang="nope"></div><pre><code>&lt;x&gt;` + "\n" + `</code></pre></div>`},
+		{"no language", "```\nx\n```", `<div class="code-block"><div class="code-head"></div><pre><code>x` + "\n" + `</code></pre></div>`},
+		{"indented", "    x\n", `<div class="code-block"><div class="code-head"></div><pre><code>x` + "\n" + `</code></pre></div>`},
+		{"odd language dropped", "```a\"b\nx\n```", `<div class="code-head"></div>`},
+		{"c++", "```c++\nint x;\n```", `data-lang="c++"`},
+	} {
+		got, err := r.render([]byte(c.src), "en")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(got), c.want) {
+			t.Errorf("%s: want %s in\n%s", c.name, c.want, got)
+		}
+	}
+	// The language label is not post text.
+	got, _ := r.render([]byte("```python\nx = 1\n```"), "en")
+	if text := plainText(string(got)); strings.Contains(text, "python") {
+		t.Errorf("text = %q", text)
+	}
+}
+
+func TestTableOfContents(t *testing.T) {
+	r := NewRenderer("en")
+	got, err := r.render([]byte("# Top\n\n## Первый & *второй*\n\ntext\n\n### Sub\n\n#### Deep\n\n##### Too deep\n\n## ![only image](assets/a.png)\n\n> ## In a quote\n"), "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []TOCItem{
+		{2, "pervyy-vtoroy", "Первый & второй"},
+		{3, "sub", "Sub"},
+		{4, "deep", "Deep"},
+		{2, "in-a-quote", "In a quote"},
+	}
+	if toc := tableOfContents(string(got)); !slices.Equal(toc, want) {
+		t.Errorf("toc = %+v\nwant %+v\n%s", toc, want, got)
+	}
+	if toc := tableOfContents("<p>no headings</p>"); toc != nil {
+		t.Errorf("toc = %+v", toc)
+	}
+}
+
+func TestOlder(t *testing.T) {
+	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
+	a, b, draft := &Post{Key: "a.md", Slug: "a", Date: d(1)}, &Post{Key: "b.md", Slug: "b", Date: d(2)}, &Post{Key: "c.md", Slug: "c", Date: d(3), Draft: true}
+	ix := NewIndex([]*Post{a, b, draft}, slog.New(slog.DiscardHandler))
+	if got := ix.Older(b); got != a {
+		t.Errorf("Older(b) = %+v", got)
+	}
+	if got := ix.Older(a); got != nil {
+		t.Errorf("Older(a) = %+v", got)
+	}
+	if got := ix.Older(draft); got != nil {
+		t.Errorf("Older(draft) = %+v", got)
 	}
 }
 
@@ -208,6 +325,7 @@ func unsafeHTML(s string) string {
 func FuzzParse(f *testing.F) {
 	f.Add([]byte("---\ntitle: T\ndate: 2026-11-03\n---\n# Hi\n"))
 	f.Add([]byte("---\ntags: &a [*a]\n---\n"))
+	f.Add([]byte("---\ntitle: T\ndate: 2026-11-03\n---\n> [!tip] **a\n> b** c  \n> d\n\n[!note]: /x\n\n> [!note]\n\n    code\n\n## h & i\n"))
 	for _, p := range xssCorpus {
 		f.Add([]byte("---\ntitle: T\ndate: 2026-11-03\n---\n" + p))
 	}
@@ -222,6 +340,11 @@ func FuzzParse(f *testing.F) {
 		}
 		if bad := unsafeHTML(string(p.HTML)); bad != "" {
 			t.Fatalf("%s\n%s", bad, p.HTML)
+		}
+		for _, item := range p.TOC {
+			if item.Level < 2 || item.Level > 4 || item.ID == "" || item.Title == "" {
+				t.Fatalf("bad contents item: %+v", item)
+			}
 		}
 	})
 }
