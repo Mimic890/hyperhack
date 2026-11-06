@@ -167,7 +167,7 @@ blocks:
 
 - Markdown from S3 rendered to HTML.
 - Banner: the cover (`cover`) above the title at full window width, height `min(48vh, 460px)`, 260px at ≤ 640px, `object-fit: cover`, no rounded corners. Its lower part fades into `--bg`: a gradient `transparent 30%` → `--bg 100%` over the image, and `backdrop-filter: blur(14px)` under the mask `linear-gradient(to bottom, transparent, #000 70%)` in the lower 45%. The `<img>` keeps `width`/`height`. No cover: no banner.
-- Post header: aligned to the left edge of the text column, overlaps the banner by 150px (100px at < 1000px); no overlap without a banner. Order: tags, title, metadata (date, `updated` if set, reading time, views).
+- Post header: aligned to the left edge of the text column, overlaps the banner by 150px (100px at < 1000px); no overlap without a banner. Order: tags, title, metadata (date, `updated` if set, reading time, views). Over a banner the metadata is `--text` and the title has a `--bg` halo (`text-shadow`), so both stay readable on any cover.
 - Grid: text (`max-width: 680px`) on the left, table of contents 250px on the right, gap 80px. Below 1000px the contents move into `<details>` "Contents" above the text.
 - Table of contents: built on the server from h2–h4, which already have ids. A tree: h3 indented 30px, h4 46px with a smaller font. Each item has a 2px `--line` line on its left. Active item: `--text`, `--uv` line, weight 600; its parent h2 is `--text` too. The column is `position: sticky; top: 96px`. `post.js` marks the active item with `IntersectionObserver`. No headings: no contents.
 - Heading markers: `##` hangs in the margin left of h2 and `###` left of h3. CSS `::before`, not text; JetBrains Mono, `--uv`, opacity 0.6 and 0.45. Brighter on hover; a click copies the link to the section (JS). None below 1000px.
@@ -382,7 +382,7 @@ The service stores per-post metrics only. Storage: SQLite.
 
 - Server-side at render time: `github.com/yuin/goldmark` + `github.com/yuin/goldmark-highlighting/v2` (chroma v2). No JS.
 - CSS classes, not inline styles (`chromahtml.WithClasses`), so light and dark themes each get their own palette.
-- Header 44px above each block: language on the left in `--muted` (empty if not set), "Copy" button on the right. After a click: a check mark and "Copied" for 1.5 s. The button appears only with JS.
+- Header 44px above each block, indented ones too: language on the left in `--muted` (empty if not set), "Copy" button on the right. After a click: a check mark and "Copied" for 1.5 s. The button appears only with JS. The language is an attribute shown by CSS, so it stays out of search text and RSS.
 
 ### Callouts
 
@@ -557,7 +557,7 @@ Other methods → `405`. Unknown paths → `404`.
 
 - All HTML through `html/template` (context-aware escaping). Templates parsed at startup.
 - Markdown: goldmark with GFM (tables, strikethrough, autolinks), without `WithUnsafe`. By default goldmark does not render raw HTML or dangerous URLs.
-- Defense in depth: post HTML passes `bluemonday` (UGC policy + chroma classes + heading ids + callout and code block classes).
+- Defense in depth: post HTML passes `bluemonday` (UGC policy + chroma classes + heading ids + callout and code block classes + code language attribute).
 - External links get `rel="noopener noreferrer"`.
 - Images only from `assets/`. External images are blocked by CSP (also keeps reader IPs private).
 - JSON-LD from `json.Marshal` (escapes `<`, `>`, `&`).
@@ -739,3 +739,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-06 — Language switch as a dropdown: the top bar shows the current language, its menu lists English and Русский. A native `popover`, placed with CSS anchor positioning, so it opens and closes without JS; the menu buttons still post the `/prefs` form. Without `popover` support the buttons show inline.
 - 2026-11-06 — Redesign. New tokens (`--uv`, `--ember`, `--uv-soft`…), font Onest instead of Inter, sticky 72px top bar; at ≤ 640px the site name is hidden so the bar fits one row. Text on `--uv-soft` is `--text`, because `--uv` text stays below 4.5:1 there in the dark theme. Hash colors for tags removed. Main page built from blocks in `home.md`, a reserved name in the vault root; default set without author text; `POPULAR_LIMIT` removed in favor of the `limit` of the `popular` block; only the first `posts` block is used. Post page: banner `min(48vh, 460px)`, server-built table of contents, heading markers, code block header, Obsidian callouts (`note`, `tip`, `warning`), "Share", "Previous post". Code copies also count the "Copy" button. Search palette on `Ctrl K`, `Cmd K` and `/`; `#tag` tokens in `q` (AND), counted in the 10-term limit; tag dropdown removed, the `tag` parameter stays. Motion only under `prefers-reduced-motion: no-preference`; CSP forbids inline styles, so a script sets `view-transition-name` through the CSSOM. No new endpoints.
 - 2026-11-06 — `home.md` with no valid block falls back to the default set, so a typo cannot leave the main page empty. An unknown field in a block counts as invalid, so a typo in a field name is reported.
+- 2026-11-06 — Post page details: over a banner the metadata is `--text` and the title has a `--bg` halo, because measured on a white cover in the dark theme `--muted` metadata and the bare title fall below the contrast minimum. The code language is an attribute shown by CSS, so it stays out of search text and RSS. Indented code gets the same header as fenced code.
