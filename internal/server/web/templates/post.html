@@ -9,8 +9,8 @@
   <header>
     <h1>{{.Title}}</h1>
     <p class="meta">{{template "date" .Date}}
-      {{- if not .Updated.IsZero}} · {{t "updated" "date" (date .Updated)}}{{end}}
-      · {{t "min_read" "n" (minutes .Words)}} · {{t "views" "n" $d.Views}}</p>
+      {{- if not .Updated.IsZero}} <span>{{t "updated" "date" (date .Updated)}}</span>{{end}}
+      <span>{{t "min_read" "n" (minutes .Words)}}</span> <span>{{t "views" "n" $d.Views}}</span></p>
     {{- template "tags" .Tags}}
   </header>
   <div class="prose">

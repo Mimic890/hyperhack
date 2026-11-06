@@ -174,6 +174,36 @@ func TestPost(t *testing.T) {
 	}
 }
 
+func TestTopBarSearch(t *testing.T) {
+	cfg := testConfig()
+	cfg.GitHubURL = "https://github.com/example"
+	s := newSite(t, cfg, testIndex(3))
+	order := func(body string, want ...string) {
+		t.Helper()
+		at := 0
+		for _, w := range want {
+			i := strings.Index(body[at:], w)
+			if i < 0 {
+				t.Fatalf("missing %q after byte %d", w, at)
+			}
+			at += i
+		}
+	}
+	home := s.get("/").Body.String()
+	order(home, `<a class="search-field" href="/search"`, "Search posts", "Ctrl K", `name="theme"`, `popovertarget="lang-menu"`, `href="/rss.xml"`, `href="https://github.com/example"`)
+	if page2 := s.get("/?page=2").Body.String(); !strings.Contains(page2, `class="search-field"`) {
+		t.Error("page 2 of the main page has no search field")
+	}
+	// Other pages get the icon only, and the link works without JS.
+	for _, path := range []string{"/posts/post-a", "/search", "/nope"} {
+		body := s.get(path).Body.String()
+		if strings.Contains(body, "search-field") || strings.Contains(body, "Ctrl K") {
+			t.Errorf("%s has the search field", path)
+		}
+		order(body, `<a class="icon" href="/search"`, `name="theme"`)
+	}
+}
+
 func TestCookies(t *testing.T) {
 	s := newSite(t, testConfig(), testIndex(1))
 	body := s.get("/", &http.Cookie{Name: "lang", Value: "ru"}, &http.Cookie{Name: "theme", Value: "dark"}).Body.String()
@@ -262,7 +292,7 @@ func TestStatic(t *testing.T) {
 	if strings.Contains(css, ".bg {") {
 		t.Error("chroma .bg rule not dropped")
 	}
-	if rec := s.get("/static/fonts/inter-latin-wght-normal.woff2"); rec.Code != 200 || rec.Body.Len() < 10000 {
+	if rec := s.get("/static/fonts/onest-latin-wght-normal.woff2"); rec.Code != 200 || rec.Body.Len() < 10000 {
 		t.Errorf("font = %d, %d bytes", rec.Code, rec.Body.Len())
 	}
 	if got := s.get("/static/fonts/../../pages.go").Code; got == 200 {
