@@ -47,6 +47,9 @@
     {{- else}}<svg class="logo" viewBox="0 0 40 29" width="40" height="29" aria-hidden="true"><rect width="40" height="29" rx="8" fill="currentColor"/><path d="M14 8v13M26 8v13M14 14.5h12" stroke-width="3" stroke-linecap="round"/></svg>
     {{- end}}<span>{{.Site.Name}}</span>
   </a>
+  {{- with .Post}}
+  <span class="bar-title" aria-hidden="true">{{.Title}}</span>
+  {{- end}}
   <nav class="tools" aria-label="{{t "settings"}}">
     {{block "searchbutton" .}}<a class="icon" href="/search" title="{{t "search_placeholder"}}" aria-label="{{t "search_placeholder"}}">{{template "searchicon"}}</a>{{end}}
     <form method="post" action="/prefs" class="prefs">

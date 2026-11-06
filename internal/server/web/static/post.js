@@ -1,4 +1,5 @@
-// Post page: votes (with ALTCHA) and the metrics beacon. The page works without this script.
+// Post page: votes (with ALTCHA), contents, copy buttons, sharing and the metrics beacon.
+// The page works without this script.
 (() => {
   const article = document.querySelector("article.post[data-slug]");
   if (!article) return;
@@ -9,10 +10,10 @@
 
   // Votes: click → challenge → solve → vote. Clicking the pressed button removes the vote.
   const votes = article.querySelector(".votes");
+  const status = votes?.querySelector("[role=status]");
   // The solver needs crypto.subtle (secure contexts only); without it the buttons stay disabled.
   if (votes && globalThis.hyperhackAltcha && globalThis.crypto?.subtle) {
     const buttons = votes.querySelectorAll("button[data-vote]");
-    const status = votes.querySelector("[role=status]");
     const busy = (on) => {
       votes.setAttribute("aria-busy", String(on));
       buttons.forEach((b) => (b.disabled = on));
@@ -91,6 +92,92 @@
       }
     });
     article.querySelectorAll(".depth").forEach((m) => io.observe(m));
+  }
+
+  // Contents: the active item is the last heading above the line at 35% of the window.
+  // An item for h3 or h4 also marks its parent h2.
+  const heads = [...article.querySelectorAll(".prose h2[id], .prose h3[id], .prose h4[id]")];
+  const items = article.querySelectorAll(".toc a");
+  if (items.length && "IntersectionObserver" in globalThis) {
+    let active;
+    const mark = () => {
+      const line = innerHeight * 0.35;
+      const cur = heads.findLast((h) => h.getBoundingClientRect().top <= line);
+      if (cur === active) return;
+      active = cur;
+      items.forEach((a) => {
+        const on = !!cur && a.getAttribute("href") === "#" + cur.id;
+        if (on) a.setAttribute("aria-current", "location");
+        else a.removeAttribute("aria-current");
+        a.classList.remove("parent");
+        if (!on) return;
+        let li = a.parentElement;
+        while (li && !li.classList.contains("l2")) li = li.previousElementSibling;
+        li?.firstElementChild.classList.add("parent");
+      });
+    };
+    const io = new IntersectionObserver(mark, { rootMargin: "-72px 0px -65% 0px" });
+    heads.forEach((h) => io.observe(h));
+  }
+
+  // The clipboard API exists only in secure contexts; without it these controls do not appear.
+  const clip = navigator.clipboard;
+  const pageURL = () => location.href.split("#")[0];
+  if (clip) {
+    const uiLang = document.querySelector(".topbar")?.lang;
+    article.querySelectorAll(".code-head").forEach((head) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "copy";
+      btn.lang = uiLang;
+      btn.setAttribute("aria-live", "polite");
+      btn.textContent = article.dataset.copy;
+      let timer;
+      btn.addEventListener("click", async () => {
+        try {
+          await clip.writeText(head.nextElementSibling.textContent);
+        } catch {
+          return;
+        }
+        copies++; // writeText fires no copy event
+        btn.textContent = article.dataset.copied;
+        btn.classList.add("done");
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          btn.textContent = article.dataset.copy;
+          btn.classList.remove("done");
+        }, 1500);
+      });
+      head.append(btn);
+    });
+    // A click on a ::before marker targets the heading, left of its box.
+    article.querySelector(".prose")?.addEventListener("click", (e) => {
+      const h = e.target;
+      if (h.matches(".prose > h2[id], .prose > h3[id]") && e.clientX < h.getBoundingClientRect().left) {
+        clip.writeText(pageURL() + "#" + h.id).catch(() => {});
+      }
+    });
+  }
+
+  const share = article.querySelector(".share");
+  if (share && (navigator.share || clip)) {
+    share.hidden = false;
+    share.addEventListener("click", async () => {
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: article.querySelector("h1").textContent, url: pageURL() });
+          return;
+        } catch (e) {
+          if (e.name === "AbortError") return; // the reader closed the share sheet
+        }
+      }
+      try {
+        await clip.writeText(pageURL());
+        status.textContent = votes.dataset.linkCopied;
+      } catch {
+        // nothing to copy with: no message
+      }
+    });
   }
 
   const onClick = (e) => {

@@ -166,7 +166,7 @@ Post text…
 | `date` | date | yes | Publish date. "Newest" is sorted by it. |
 | `updated` | date | no | Last update. Shown on the post and in RSS. |
 | `tags` | list | no | Tags. A single string also works. |
-| `cover` | string | no | Cover image, a file inside `assets/`. Shown as a full-width banner above the title, cropped to a wide strip around the center: keep the subject in the middle. |
+| `cover` | string | no | Cover image, a file inside `assets/`. Shown as a full-width banner above the title, cropped to a wide strip around the center: keep the subject in the upper middle, the lower part fades into the page and the title sits on it. |
 | `slug` | string | no | URL part. Default: made from the file name. |
 | `lang` | string | no | Post language, two lower-case letters (`en`, `ru`). Default: `DEFAULT_LANG`. |
 | `draft` | bool | no | `true` keeps the post unpublished. Default `false`. |
@@ -181,6 +181,9 @@ Rules:
 - Unknown fields are ignored, so Obsidian can add its own.
 - Images: standard Markdown, `![Alt text](assets/photo.webp)`. A path `assets/…` becomes `/assets/…` on the site. External images are blocked by the CSP.
 - Allowed asset types: `png jpg jpeg webp avif gif svg mp4 webm`.
+- Headings `##`, `###` and `####` make the table of contents. A post without them has none.
+- Callouts use the Obsidian syntax: `> [!note]`, `> [!tip]` or `> [!warning]`, in any case, with an optional title after the type. Without a title the block gets the type's name, in Russian for `lang: ru` and in English otherwise. Any other type stays a plain quote.
+- A code block shows the language from its fence, so write ` ```go `.
 - `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon. In the top bar it fits a 40×29 px box.
 
 ## Main page
