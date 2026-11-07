@@ -214,15 +214,26 @@ func outboundHosts(s string) []string {
 // plainText returns the text nodes of s, separated by spaces.
 func plainText(s string) string {
 	var b strings.Builder
+	// Inside a formula only its TeX source counts: the MathML is one tag per symbol.
+	inMath, inTeX := false, false
 	z := html.NewTokenizer(strings.NewReader(s))
 	for {
-		switch z.Next() {
+		switch tt := z.Next(); tt {
 		case html.ErrorToken:
 			return strings.Join(strings.Fields(b.String()), " ")
 		case html.TextToken:
-			b.Write(z.Text())
+			if !inMath || inTeX {
+				b.Write(z.Text())
+			}
 		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
-			if name, _ := z.TagName(); !inlineTags[string(name)] {
+			name, _ := z.TagName()
+			switch string(name) {
+			case "math":
+				inMath = tt == html.StartTagToken
+			case "annotation":
+				inTeX = tt == html.StartTagToken
+			}
+			if !inlineTags[string(name)] {
 				b.WriteByte(' ') // block boundary: keep words apart
 			}
 		}

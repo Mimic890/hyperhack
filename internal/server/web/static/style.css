@@ -345,6 +345,9 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 .code-head { display: flex; align-items: center; justify-content: space-between; height: 44px; padding-left: 1.125rem; color: var(--muted); font-size: 0.8125rem; }
 .code-head::before { content: attr(data-lang); }
 .prose .code-block pre { margin: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+
+/* Math: MathML from the server. Wide display formulas scroll instead of widening the page. */
+.prose math[display="block"] { margin: 0 0 1.25rem; overflow-x: auto; overflow-y: hidden; }
 .copy {
   display: inline-flex; align-items: center; gap: 0.35rem; height: 44px; padding: 0 1rem;
   border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer;
