@@ -246,7 +246,10 @@ func TestHomeBlocks(t *testing.T) {
 		day := store.Day(time.Now())
 		_ = s.d.Store.Add(context.Background(), day, store.Inc{Slug: "pa", Metric: store.View, N: 7}, store.Inc{Slug: "pb", Metric: store.View, N: 2}, store.Inc{Slug: "gone", Metric: store.View, N: 99})
 		body := s.get("/").Body.String()
-		inOrder(t, body, `<section class="popular"`, `<li><a href="/posts/pa">PA</a><p class="meta">Views: 7</p>`, `href="/rss.xml">Subscribe via RSS`)
+		inOrder(t, body, `<section class="popular"`, `<li><a href="/posts/pa">PA</a><p class="meta">Views: 7</p>`)
+		if strings.Contains(body[strings.Index(body, `<section class="popular"`):], `href="/rss.xml"`) {
+			t.Error("popular block repeats the RSS link of the top bar")
+		}
 		if strings.Contains(body, `href="/posts/pb"`) || strings.Contains(body, "gone") {
 			t.Error("popular limit ignored or a removed post shown")
 		}

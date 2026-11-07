@@ -418,7 +418,6 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 .popular li::marker { color: var(--muted); }
 .popular li + li { margin-top: 0.75rem; }
 .popular .meta { margin: 0.125rem 0 0; }
-.rss-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 0.5rem; font-weight: 600; }
 
 .error h1 { margin: 0 0 0.75rem; font-size: 2rem; letter-spacing: -0.02em; }
 
