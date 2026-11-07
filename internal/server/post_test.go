@@ -57,7 +57,7 @@ func TestPostLayout(t *testing.T) {
 			`<blockquote class="callout callout-tip"><p class="callout-title">Hint</p>`,
 			`<div class="code-block"><div class="code-head" data-lang="go"></div>`,
 			`Was this post helpful?`, `data-vote="like"`, `data-vote="dislike"`, `role="status"`,
-			`<button type="button" class="vote share" hidden>Share</button>`, `</footer>`,
+			`<button type="button" class="vote share" aria-label="Share" title="Share" hidden><svg`, `</footer>`,
 			`<a class="post-card" href="/posts/plain"><span class="label">Previous post</span><strong lang="ru">Plain</strong></a>`,
 			`<a class="post-card" href="/"><strong>All posts</strong></a>`,
 			`<nav class="toc toc-side" lang="en" aria-label="Contents">`,
@@ -94,7 +94,7 @@ func TestPostLayout(t *testing.T) {
 
 	t.Run("Russian UI", func(t *testing.T) {
 		body := s.get("/posts/full", &http.Cookie{Name: "lang", Value: "ru"}).Body.String()
-		mustContain(t, body, "Пост был полезен?", ">Поделиться<", `data-link-copied="Ссылка скопирована"`,
+		mustContain(t, body, "Пост был полезен?", `aria-label="Поделиться"`, `data-link-copied="Ссылка скопирована"`,
 			`data-copy="Копировать"`, `data-copied="Скопировано"`, "<summary>Содержание</summary>", "Предыдущий пост")
 	})
 
