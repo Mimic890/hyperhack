@@ -101,15 +101,22 @@
     article.querySelectorAll(".depth").forEach((m) => io.observe(m));
   }
 
-  // Contents: the active item is the last heading above the line at 35% of the window.
+  // Contents: the active item is the last heading that has reached the top, where a
+  // contents link puts it. At the end of the page the last visible heading wins, since
+  // short sections there never reach the top. A clicked item stays active until the
+  // reader scrolls: a short section would otherwise hand it to the next heading.
   // An item for h3 or h4 also marks its parent h2.
   const heads = [...article.querySelectorAll(".prose h2[id], .prose h3[id], .prose h4[id]")];
   const items = article.querySelectorAll(".toc a");
-  if (items.length && "IntersectionObserver" in globalThis) {
-    let active;
+  if (items.length) {
+    let active, pinned, queued;
     const mark = () => {
-      const line = innerHeight * 0.35;
-      const cur = heads.findLast((h) => h.getBoundingClientRect().top <= line);
+      queued = false;
+      const top = (document.querySelector(".topbar")?.offsetHeight || 0) + 32;
+      let cur = pinned || heads.findLast((h) => h.getBoundingClientRect().top <= top);
+      if (!pinned && innerHeight + scrollY >= document.documentElement.scrollHeight - 2) {
+        cur = heads.findLast((h) => h.getBoundingClientRect().top < innerHeight) || cur;
+      }
       if (cur === active) return;
       active = cur;
       items.forEach((a) => {
@@ -123,8 +130,25 @@
         li?.firstElementChild.classList.add("parent");
       });
     };
-    const io = new IntersectionObserver(mark, { rootMargin: "-72px 0px -65% 0px" });
-    heads.forEach((h) => io.observe(h));
+    const later = () => {
+      if (!queued) {
+        queued = true;
+        requestAnimationFrame(mark);
+      }
+    };
+    items.forEach((a) =>
+      a.addEventListener("click", () => {
+        pinned = heads.find((h) => "#" + h.id === a.getAttribute("href"));
+        mark();
+      }),
+    );
+    // Only the reader's own input unpins; the link's smooth scroll fires none of these.
+    for (const t of ["wheel", "touchstart", "keydown"]) {
+      addEventListener(t, () => { if (pinned) { pinned = undefined; later(); } }, { passive: true });
+    }
+    addEventListener("scroll", later, { passive: true });
+    addEventListener("resize", later);
+    mark();
   }
 
   // The clipboard API exists only in secure contexts; without it these controls do not appear.
