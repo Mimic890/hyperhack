@@ -187,7 +187,7 @@ Rules:
 - Math uses the Obsidian syntax: `$…$` inside a line, `$$…$$` as a block. The server turns it into MathML, so formulas need no script and also show in RSS. `$5 and $10` stays text; write `\$` for a literal dollar. A formula the converter cannot read is shown as its TeX.
 - Diagrams use a ` ```mermaid ` code block, as in Obsidian. The browser draws them with Pele; without JavaScript, in RSS, or when the diagram has an error, the code block is shown.
 - A code block shows the language from its fence, so write ` ```go `.
-- `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon. In the top bar it fits a 47×34 px box.
+- `assets/logo.svg`, if present and `home.md` sets no `logo`, replaces the built-in logo in the top bar and the favicon. See [Logo](#logo).
 
 ## Main page
 
@@ -255,6 +255,22 @@ theme:
 - The same `theme` field in a post's frontmatter changes only that post's page. Colors the post leaves out come from `home.md`, then the built-in ones.
 - An unknown name or a bad value is ignored with a WARN in the log; the rest of the theme and the post still work.
 - Contrast is up to you: the service does not check it. Code highlighting keeps its own colors.
+
+### Logo
+
+`logo` in `home.md`, next to `blocks`, sets the top bar logo for each theme and a separate favicon:
+
+```yaml
+logo:
+  light: assets/brand/logo-black.svg
+  dark: assets/brand/logo-white.svg
+  favicon: assets/brand/favicon.png
+```
+
+- Paths are files inside `assets/`: svg, png, jpg, webp, avif or gif. `logo: assets/logo.svg` with one path uses it everywhere.
+- In the top bar a logo fits a 47×34 px box. Without `dark` the light logo is used in both themes, and the other way round.
+- Without `favicon` the tab icon is the light logo. Without any `logo`, `assets/logo.svg` is used if it exists, else the built-in mark.
+- A bad path or unknown key is ignored with a WARN in the log.
 
 ## Publishing from Obsidian
 

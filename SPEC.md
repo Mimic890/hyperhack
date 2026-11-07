@@ -140,6 +140,7 @@ No other animations on load or on card hover.
 
 - On all pages. Height 60px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
 - Left: logo in a 47×34px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
+- Logos come from `logo` in `home.md`: one path for all, or a map `light` / `dark` (top bar, per effective theme) and `favicon`. Each is an image inside `assets/` (svg, png, jpg, jpeg, webp, avif, gif); a leading `/` is dropped. A bad value or unknown key → only that entry is ignored, WARN. Fallbacks: a missing top bar logo takes the other one; the favicon takes `light`, then `dark`; then `assets/logo.svg` if the bucket has it; then the built-in mark. With two top bar logos both `<img>` are in the page and CSS shows the one of the current theme, like the theme buttons.
 - On post pages at ≥ 1000px: the post title in the middle of the bar, 13px `--muted`, centered, at most two lines (`line-clamp: 2`), up to 36rem wide. It appears (160 ms fade) only after the page title has scrolled under the bar, so the two titles are never seen together; `post.js` watches the `h1` with an `IntersectionObserver`. Without JS it stays hidden. Below 1000px the bar has no title.
 - Right, left to right: search button, theme toggle, RSS link, author's GitHub link (URL from `.env`), language dropdown (`en` / `ru`) last.
 - Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px, height 36px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
@@ -149,7 +150,7 @@ No other animations on load or on card hover.
 
 Built from blocks listed in `home.md`, a file in the vault root. The name is reserved: this file is not a post and stays out of the index, search, RSS, sitemap, `/llms.txt` and `/posts/<slug>.md`. A `home.md` in a subfolder is an ordinary post candidate. The name has no `_` because Remotely Save does not sync such files.
 
-The file holds only YAML frontmatter with a `blocks` list and an optional `theme` (see Design → Colors → Own colors); its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
+The file holds only YAML frontmatter with a `blocks` list and optional `theme` (see Design → Colors → Own colors) and `logo` (see Top bar); its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
 
 ```yaml
 ---
@@ -246,7 +247,7 @@ Proposed variables (final names set during implementation):
 ## Bucket layout
 
 - `assets/` — all assets: covers, images in posts. Decided.
-- `assets/logo.svg` — optional site logo in the top bar and favicon. Without it the service shows a built-in mark.
+- `assets/logo.svg` — site logo in the top bar and favicon when `home.md` sets no `logo` (see Pages → Top bar). Without both the service shows a built-in mark.
 - `home.md` — optional main page blocks, in the root only (see Pages → Main page).
 - The service ignores keys where any path segment starts with `.` or `_` (same rule as Remotely Save).
 
@@ -577,7 +578,7 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 | `/metrics` | GET | private network | Caddy block, `METRICS_ALLOW` |
 | `/healthz` | GET | public | constant body, no data |
 | `/prefs` | POST | public | form body ≤ 4 KB, enum check for `theme` / `lang`, redirect only to a local path |
-| `/favicon.ico` | GET | public | built-in SVG mark, or `302` to `/assets/logo.svg` when the bucket has a logo; never `404` |
+| `/favicon.ico` | GET | public | built-in SVG mark, or `302` to the favicon from `home.md` / `/assets/logo.svg`; never `404` |
 | `/static/*` | GET | public | embedded CSS, JS and fonts, and `/static/theme/<hash>.css` built from validated colors (unknown hash → `404`); no directory listing |
 | `/<INDEXNOW_KEY>.txt` | GET | public | only if `INDEXNOW_KEY` is set; body is the key |
 
@@ -792,3 +793,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-07 — The `popular` block shows likes and dislikes next to views, and an eye icon instead of the word "Views". The votes come from one query for all posts, made only when the block has posts.
 - 2026-11-07 — Built-in palette: plain neutral dark (`#0A0A0A`) and white (`#FFFFFF`) with gray surfaces, borders and secondary text; the only color is a plain blue accent (`#2563EB` light, `#3B82F6` dark), also used for `--ember`, `--uv-soft` and the favicon. The featured card loses its tint and sits on `--raise`. Code highlighting keeps its palette. Own colors in `home.md` work as before.
 - 2026-11-07 — Top bar logo box grows from 40×29px to 47×34px (about 17%), same aspect ratio: the mark looked too small next to the 21px site name.
+- 2026-11-07 — Logos in `home.md`: `logo` sets the top bar logo for the light and the dark theme and a separate favicon, as paths inside `assets/`. `assets/logo.svg` stays as the fallback, so existing sites do not change. The icon link loses `type="image/svg+xml"`, since the favicon can now be a PNG.
