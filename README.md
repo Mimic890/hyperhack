@@ -47,7 +47,7 @@ The bucket is the source of truth. The service polls it and mirrors it to `./vau
    chmod 600 .env
    ```
 
-   `docker-compose.yml` only pulls the released image from GHCR and pins the latest release, for example `ghcr.io/mimic890/hyperhack:0.1.0`. Image tags are the release version without the `v`, and they are never overwritten. There is no `latest` tag.
+   `docker-compose.yml` only pulls the released image from GHCR and pins the latest release, for example `ghcr.io/mimic890/hyperhack:0.2.0`. Image tags are the release version without the `v`, and they are never overwritten. There is no `latest` tag.
 
 2. Create the data folders. The container runs as user `10001`:
 
