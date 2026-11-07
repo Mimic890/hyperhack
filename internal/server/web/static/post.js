@@ -110,6 +110,38 @@
   const items = article.querySelectorAll(".toc a");
   if (items.length) {
     let active, pinned, queued;
+    // One --uv bar slides between the side contents items. Moving down, its bottom edge
+    // leads and the top follows (up: the reverse), so it stretches on the way.
+    const side = article.querySelector(".toc-side");
+    const ink = document.createElement("span");
+    ink.className = "toc-ink";
+    if (side) {
+      side.append(ink);
+      side.classList.add("has-ink");
+    }
+    const moveInk = () => {
+      const a = side?.querySelector("a[aria-current]");
+      if (!a) {
+        ink.classList.remove("on");
+        return;
+      }
+      const top = a.offsetTop;
+      const bottom = side.clientHeight - top - a.offsetHeight;
+      if (!ink.classList.contains("on")) {
+        ink.classList.add("jump"); // first show: appear in place, no slide from the top
+        ink.style.top = top + "px";
+        ink.style.bottom = bottom + "px";
+        ink.getBoundingClientRect();
+        ink.classList.remove("jump");
+        ink.classList.add("on");
+        return;
+      }
+      const down = top > parseFloat(ink.style.top);
+      ink.classList.toggle("down", down);
+      ink.classList.toggle("up", !down);
+      ink.style.top = top + "px";
+      ink.style.bottom = bottom + "px";
+    };
     const mark = () => {
       queued = false;
       const top = (document.querySelector(".topbar")?.offsetHeight || 0) + 32;
@@ -129,6 +161,7 @@
         while (li && !li.classList.contains("l2")) li = li.previousElementSibling;
         li?.firstElementChild.classList.add("parent");
       });
+      moveInk();
     };
     const later = () => {
       if (!queued) {
@@ -147,7 +180,15 @@
       addEventListener(t, () => { if (pinned) { pinned = undefined; later(); } }, { passive: true });
     }
     addEventListener("scroll", later, { passive: true });
-    addEventListener("resize", later);
+    addEventListener("resize", () => {
+      later();
+      if (ink.classList.contains("on")) {
+        ink.classList.add("jump");
+        moveInk();
+        ink.getBoundingClientRect();
+        ink.classList.remove("jump");
+      }
+    });
     mark();
   }
 

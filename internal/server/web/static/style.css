@@ -286,6 +286,10 @@ main > .post { max-width: none; }
 .toc a:focus-visible { outline-offset: -2px; }
 .toc a[aria-current] { border-left-color: var(--uv); color: var(--text); font-weight: 600; }
 .toc-side { display: none; }
+/* The sliding bar from post.js replaces the active item's own --uv line. */
+.toc-side.has-ink a[aria-current] { border-left-color: var(--line); }
+.toc-ink { position: absolute; left: 0; width: 2px; border-radius: 2px; background: var(--uv); opacity: 0; pointer-events: none; }
+.toc-ink.on { opacity: 1; }
 .toc-details { margin-bottom: 1.5rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--raise); }
 .toc-details summary { display: flex; align-items: center; min-height: 44px; font-weight: 600; cursor: pointer; }
 .toc-details summary::before { content: "›"; content: "›" / ""; width: 1em; color: var(--muted); }
@@ -444,6 +448,11 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 }
 /* Motion. TestMotionGated keeps all of it in this block. */
 @media (prefers-reduced-motion: no-preference) {
+  /* Contents bar: the leading edge moves first, the trailing one 90 ms later. */
+  .toc-ink { transition: top 320ms cubic-bezier(0.3, 0.7, 0.2, 1), bottom 320ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 160ms; }
+  .toc-ink.down { transition-delay: 90ms, 0ms, 0ms; }
+  .toc-ink.up { transition-delay: 0ms, 90ms, 0ms; }
+  .toc-ink.jump { transition: none; }
   .bar-title { transition: opacity 160ms ease-out, visibility 160ms; }
   html { scroll-behavior: smooth; }
 
