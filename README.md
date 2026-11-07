@@ -170,6 +170,7 @@ Post text…
 | `slug` | string | no | URL part. Default: made from the file name. |
 | `lang` | string | no | Post language, two lower-case letters (`en`, `ru`). Default: `DEFAULT_LANG`. |
 | `draft` | bool | no | `true` keeps the post unpublished. Default `false`. |
+| `theme` | map | no | Colors of this post's page. Same format as in `home.md`, see [Colors](#colors). |
 
 Rules:
 
@@ -222,6 +223,38 @@ blocks:
 - `title` and `text` are a string or a map by language. With no entry for the reader's language, the first one is used.
 - An unknown or missing `type` skips the block. An unknown field or an invalid value skips only that field, so a block keeps the rest: an `intro` with a broken `text` still shows its title. An empty value, also for one language, means no text. With no `home.md`, invalid YAML or no valid blocks, the default blocks are used. Each case logs a WARN once, when the file changes or at startup.
 - When upgrading: a `home.md` in the root that was a post stops being one, so rename it. `POPULAR_LIMIT` in `.env` no longer has any effect.
+
+### Colors
+
+`theme` in `home.md`, next to `blocks`, changes the site colors for the light and the dark theme:
+
+```yaml
+theme:
+  light:
+    background: "#F6F5FB"
+    text: "#1B1930"
+    accent: "#5B3DE6"
+  dark:
+    background: "#101119"
+    accent-soft: "#8B6CFF24"
+```
+
+| Name | What it colors | Light | Dark |
+|---|---|---|---|
+| `background` | page background | `#F6F5FB` | `#101119` |
+| `surface` | cards, code, menus | `#FFFFFF` | `#171925` |
+| `border` | borders, dividers | `#E2E0EE` | `#262938` |
+| `text` | main text | `#1B1930` | `#E7E5F2` |
+| `muted` | dates, captions, descriptions | `#5D5A75` | `#9C99B3` |
+| `accent` | links, `#`, active items | `#5B3DE6` | `#8B6CFF` |
+| `accent-2` | "New post", end of the progress bar | `#B9541F` | `#FF8F57` |
+| `accent-soft` | background of active items and callouts | `#5B3DE61A` | `#8B6CFF24` |
+
+- A value is a hex color: `#rgb`, `#rrggbb`, or with two more digits for opacity (`#rrggbbaa`). Put it in quotes: in YAML `#` without quotes starts a comment. `1b1930` without `#` also works.
+- Leave out any color to keep the built-in one.
+- The same `theme` field in a post's frontmatter changes only that post's page. Colors the post leaves out come from `home.md`, then the built-in ones.
+- An unknown name or a bad value is ignored with a WARN in the log; the rest of the theme and the post still work.
+- Contrast is up to you: the service does not check it. Code highlighting keeps its own colors.
 
 ## Publishing from Obsidian
 

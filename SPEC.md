@@ -76,6 +76,28 @@ CSS custom properties. The theme mechanism does not change: `prefers-color-schem
 - Text on `--uv-soft` is always `--text`. There `--uv` is only for icons and borders: as text it stays below 4.5:1 in the dark theme.
 - `--ember` text goes only on `--raise`: on `--bg` it stays below 4.5:1 in the light theme.
 
+#### Own colors
+
+The owner can change every token, for each theme: `theme` in `home.md` for the whole site, `theme` in a post's frontmatter for that post's page.
+
+```yaml
+theme:
+  light:
+    background: "#F6F5FB"
+    text: "#1B1930"
+    accent: "#5B3DE6"
+  dark:
+    background: "#101119"
+    accent-soft: "#8B6CFF24"
+```
+
+- Names: `background` (`--bg`), `surface` (`--raise`), `border` (`--line`), `text` (`--text`), `muted` (`--muted`), `accent` (`--uv`), `accent-2` (`--ember`), `accent-soft` (`--uv-soft`).
+- Value: a hex color `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`; the last two digits are opacity, as `accent-soft` needs. The `#` may be left out. A color with `#` goes in quotes: in YAML an unquoted `#` starts a comment, and the service warns about that case.
+- Any color may be left out, and an empty value is no color. A post color wins over the `home.md` one, which wins over the built-in one.
+- An unknown name, a bad value or a key other than `light` / `dark` → only that entry is ignored, WARN; a post stays published. Nothing but a validated hex color reaches the CSS.
+- The service builds one stylesheet per color set, named by its content hash, and links it after `style.css`: `/static/theme/<hash>.css`. No inline styles, so the CSP stays as it is.
+- Contrast of own colors is the owner's choice and is not checked. Code highlighting keeps its palette.
+
 ### Typography
 
 - Text: Onest (OFL, Latin + Cyrillic), variable `woff2`, normal style, self-hosted in `static/fonts/` with `OFL-Onest.txt`.
@@ -127,7 +149,7 @@ No other animations on load or on card hover.
 
 Built from blocks listed in `home.md`, a file in the vault root. The name is reserved: this file is not a post and stays out of the index, search, RSS, sitemap, `/llms.txt` and `/posts/<slug>.md`. A `home.md` in a subfolder is an ordinary post candidate. The name has no `_` because Remotely Save does not sync such files.
 
-The file holds only YAML frontmatter with a `blocks` list; its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
+The file holds only YAML frontmatter with a `blocks` list and an optional `theme` (see Design → Colors → Own colors); its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
 
 ```yaml
 ---
@@ -289,6 +311,7 @@ Post text…
 | `slug` | string | no | URL part. Default: from the file name. |
 | `lang` | string | no | Post language, ISO 639-1 (`en`, `ru`). Default: `DEFAULT_LANG`. Used in `<html lang>`, RSS, meta tags. |
 | `draft` | bool | no | `true` — not published. Default `false`. |
+| `theme` | map | no | Colors of this post page over the site ones. See Design → Colors → Own colors. |
 
 Rules:
 
@@ -555,7 +578,7 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 | `/healthz` | GET | public | constant body, no data |
 | `/prefs` | POST | public | form body ≤ 4 KB, enum check for `theme` / `lang`, redirect only to a local path |
 | `/favicon.ico` | GET | public | built-in SVG mark, or `302` to `/assets/logo.svg` when the bucket has a logo; never `404` |
-| `/static/*` | GET | public | embedded CSS, JS and fonts only, no directory listing |
+| `/static/*` | GET | public | embedded CSS, JS and fonts, and `/static/theme/<hash>.css` built from validated colors (unknown hash → `404`); no directory listing |
 | `/<INDEXNOW_KEY>.txt` | GET | public | only if `INDEXNOW_KEY` is set; body is the key |
 
 Other methods → `405`. Unknown paths → `404`.
@@ -569,6 +592,7 @@ Other methods → `405`. Unknown paths → `404`.
 - Enums only: vote (`like` / `dislike` / `none`), source, device, theme, lang. Other values → `400`.
 - Search query: max 200 chars, max 10 terms, `#tag` tokens included. The query is built in code (match + fuzzy + prefix), never from Bleve query-string syntax: this blocks regex and wildcard DoS. Fuzziness ≤ 2, prefix min 2 chars. Page number bounded.
 - Cookies `lang` and `theme`: enum check; invalid → default.
+- Theme colors from `home.md` and posts: known names only, values only hex colors. Anything else is ignored.
 
 ### Output and XSS
 
@@ -764,3 +788,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-07 — Main page: the `popular` block loses its "Subscribe via RSS" link, since the top bar already has RSS. A bad or unknown field in a `home.md` block no longer skips the whole block: only that field is ignored with WARN (the typo is still reported). An empty language entry is no text instead of an error, and a number is text, because clearing one language of `text` in the vault dropped the whole `intro` with its title.
 - 2026-11-07 — Table of contents: the active `--uv` line in the side column becomes one bar that slides between items and stretches on the way (leading edge first, trailing edge 90ms later, 320ms). Position through the CSSOM, so the CSP stays; no animation with reduced motion. The fade of the top bar title is now listed in Motion too.
 - 2026-11-07 — Year headings say "5 posts" instead of a bare number. Plural forms come from `key_one`, `key_few`, `key_many` in the i18n files; a language with a `_few` form uses the Russian rule, others the English one.
+- 2026-11-07 — Own colors: `theme` with `light` and `dark` maps in `home.md` sets any color token of the site, and the same field in a post sets its page; missing colors fall back to `home.md`, then the built-in ones. Only hex values pass, and the colors go out as a separate content-hashed stylesheet under `/static/theme/`, so the CSP needs no inline styles. A bad entry is ignored with WARN, as in `home.md` blocks.
