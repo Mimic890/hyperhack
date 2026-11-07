@@ -19,6 +19,10 @@ type Index struct {
 	search bleve.Index
 	Logo   bool    // assets/logo.svg is in the mirror
 	Home   []Block // main page blocks
+
+	themes    map[string][]byte // theme stylesheet ID → CSS
+	siteTheme string            // ID, empty when home.md sets no colors
+	postTheme map[*Post]string  // posts with colors of their own
 }
 
 // TagCount is a tag with its number of published posts.
@@ -61,6 +65,42 @@ func NewIndex(posts []*Post, log *slog.Logger) *Index {
 		panic(err) // the mapping is static, so this is a bug, not bad input
 	}
 	return ix
+}
+
+// SetTheme builds the stylesheets for the site theme and for each post that sets
+// its own colors. Call it once, before the index is shared.
+func (ix *Index) SetTheme(site Theme) {
+	ix.themes, ix.postTheme, ix.siteTheme = map[string][]byte{}, map[*Post]string{}, ""
+	add := func(t Theme) string {
+		css := t.CSS()
+		if css == nil {
+			return ""
+		}
+		id := themeID(css)
+		ix.themes[id] = css
+		return id
+	}
+	ix.siteTheme = add(site)
+	for _, p := range ix.posts {
+		if p.Theme.Light != nil || p.Theme.Dark != nil {
+			ix.postTheme[p] = add(p.Theme.Over(site))
+		}
+	}
+}
+
+// ThemeID returns the theme stylesheet ID for a post page, or for other pages
+// when p is nil. Empty means the built-in colors.
+func (ix *Index) ThemeID(p *Post) string {
+	if id, ok := ix.postTheme[p]; ok {
+		return id
+	}
+	return ix.siteTheme
+}
+
+// ThemeCSS returns the theme stylesheet with this ID.
+func (ix *Index) ThemeCSS(id string) ([]byte, bool) {
+	css, ok := ix.themes[id]
+	return css, ok
 }
 
 // Tag returns published posts with this tag, newest first.
