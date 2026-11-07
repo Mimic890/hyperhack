@@ -108,7 +108,7 @@ svg.logo path { stroke: var(--bg); }
 /* Search button on the main page. Its shortcut needs JS, so without JS the hint stays hidden. */
 .tools .search-field {
   display: inline-flex; align-items: center; gap: 0.5rem;
-  width: 240px; height: 44px; margin-right: 0.5rem; padding: 0 0.75rem;
+  width: 240px; height: 36px; margin-right: 0.5rem; padding: 0 0.75rem;
   border: 1px solid var(--line); border-radius: 12px; background: var(--raise); color: var(--muted);
   font-size: 0.9375rem; text-decoration: none;
 }
@@ -158,10 +158,15 @@ main > .home { max-width: none; }
 .top-tags .tag { padding: 0.375rem 0.875rem; font-size: 0.9375rem; }
 .tag .n { margin-left: 0.4em; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .tag[aria-current] { border-color: var(--uv); }
-.featured { display: flex; gap: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--raise); }
+/* Tinted with --uv so the newest post stands apart from the page. */
+.featured {
+  display: flex; gap: 20px; padding: 20px; border-radius: 20px;
+  border: 1px solid color-mix(in oklab, var(--uv) 24%, var(--line));
+  background: color-mix(in oklab, var(--uv) 9%, var(--raise));
+}
 .featured img { flex: none; align-self: flex-start; width: 25%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; }
 .featured-body { flex: 1; min-width: 0; }
-.featured .label { margin: 0 0 0.25rem; color: var(--ember); font-size: 0.875rem; font-weight: 650; }
+.featured .label { margin: 0 0 0.25rem; color: color-mix(in oklab, var(--ember) 80%, var(--text)); /* AA on the tint */ font-size: 0.875rem; font-weight: 650; }
 .featured h2 { margin: 0; font-size: 1.875rem; line-height: 1.15; font-weight: 750; letter-spacing: -0.02em; }
 .featured h2 a { color: var(--text); text-decoration: none; }
 .featured h2 a:hover { color: var(--uv); }

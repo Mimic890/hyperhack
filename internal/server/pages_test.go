@@ -303,7 +303,7 @@ func TestTopBarSearch(t *testing.T) {
 		}
 	}
 	home := s.get("/").Body.String()
-	order(home, `<a class="search-field" href="/search"`, "Search posts", "Ctrl K", `name="theme"`, `popovertarget="lang-menu"`, `href="/rss.xml"`, `href="https://github.com/example"`)
+	order(home, `<a class="search-field" href="/search"`, "Search posts", "Ctrl K", `name="theme"`, `href="/rss.xml"`, `href="https://github.com/example"`, `popovertarget="lang-menu"`)
 	if page2 := s.get("/?page=2").Body.String(); !strings.Contains(page2, `class="search-field"`) {
 		t.Error("page 2 of the main page has no search field")
 	}
