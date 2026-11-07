@@ -471,3 +471,30 @@ func TestPluralForm(t *testing.T) {
 		}
 	}
 }
+
+func TestSocialLinks(t *testing.T) {
+	cfg := testConfig()
+	cfg.GitHubURL = "https://github.com/from-env"
+	ix := testIndex(1)
+	s := newSite(t, cfg, ix)
+	body := s.get("/").Body.String()
+	mustContain(t, body, `href="https://github.com/from-env"`)
+	if strings.Contains(body, `aria-label="Telegram"`) || strings.Contains(body, `aria-label="X"`) {
+		t.Error("social buttons without links")
+	}
+
+	ix.Links = content.Links{X: "https://x.com/example", Telegram: "https://t.me/example"}
+	body = s.get("/").Body.String()
+	at := 0
+	for _, w := range []string{`href="/rss.xml"`, `<a class="icon" href="https://t.me/example" rel="noopener noreferrer me" title="Telegram" aria-label="Telegram">`,
+		`<a class="icon" href="https://x.com/example" rel="noopener noreferrer me" title="X" aria-label="X">`, `class="lang-toggle"`} {
+		i := strings.Index(body[at:], w)
+		if i < 0 {
+			t.Fatalf("missing or out of order: %s", w)
+		}
+		at += i
+	}
+	if strings.Contains(body, "from-env") {
+		t.Error("GITHUB_URL shown although home.md sets the links")
+	}
+}

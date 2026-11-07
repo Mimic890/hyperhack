@@ -18,6 +18,7 @@ type Index struct {
 	counts []TagCount         // most posts first, ties by name
 	search bleve.Index
 	Logo   Logo    // asset keys with fallbacks applied; empty: the built-in mark
+	Links  Links   // top bar social links from home.md
 	Home   []Block // main page blocks
 
 	themes    map[string][]byte // theme stylesheet ID → CSS

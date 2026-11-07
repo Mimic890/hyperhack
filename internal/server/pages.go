@@ -40,9 +40,9 @@ var (
 const cookieMaxAge = 365 * 24 * 60 * 60
 
 type site struct {
-	Name   string
-	GitHub string
-	Logo   content.Logo
+	Name  string
+	Links content.Links
+	Logo  content.Logo
 }
 
 // pageData is what every template gets. Fields a page does not use stay zero.
@@ -338,7 +338,7 @@ func (p *pages) data(r *http.Request) pageData {
 		Lang:         p.cfg.DefaultLang,
 		Path:         r.URL.RequestURI(),
 		CSS:          p.cssV,
-		Site:         site{Name: p.cfg.SiteName, GitHub: p.cfg.GitHubURL},
+		Site:         site{Name: p.cfg.SiteName, Links: content.Links{GitHub: p.cfg.GitHubURL}},
 		OGType:       "website",
 		JS:           []string{p.scripts["search.js"].url},
 		TransitionJS: p.scripts["transition.js"].url,
@@ -355,6 +355,9 @@ func (p *pages) data(r *http.Request) pageData {
 	d.DocLang = d.Lang
 	if ix := p.index(); ix != nil {
 		d.Site.Logo = ix.Logo
+		if ix.Links != (content.Links{}) {
+			d.Site.Links = ix.Links // links in home.md replace GITHUB_URL
+		}
 		d.ThemeCSS = themeURL(ix.ThemeID(nil))
 		if b, err := json.Marshal(ix.TopTags(len(ix.Tags()))); err == nil { // json.Marshal escapes <, > and &
 			d.TagData = template.JS(b)

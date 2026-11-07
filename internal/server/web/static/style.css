@@ -456,6 +456,8 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 }
 @media (max-width: 30rem) {
   .search input { flex-basis: 100%; }
+  /* With all three social links the top bar still fits 375px: icon buttons narrow to 36px, still above the 24px target minimum. */
+  .tools .icon, .tools .search-field { min-width: 36px; padding: 0; }
 }
 /* Motion. TestMotionGated keeps all of it in this block. */
 @media (prefers-reduced-motion: no-preference) {
