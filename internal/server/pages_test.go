@@ -247,8 +247,12 @@ func TestHomeBlocks(t *testing.T) {
 		}
 		day := store.Day(time.Now())
 		_ = s.d.Store.Add(context.Background(), day, store.Inc{Slug: "pa", Metric: store.View, N: 7}, store.Inc{Slug: "pb", Metric: store.View, N: 2}, store.Inc{Slug: "gone", Metric: store.View, N: 99})
+		for i, v := range []int{1, 1, -1} {
+			_, _ = s.d.Store.SetVote(context.Background(), []byte{byte(i)}, "pa", v)
+		}
 		body := s.get("/").Body.String()
-		inOrder(t, body, `<section class="popular"`, `<li><a href="/posts/pa">PA</a><p class="meta">Views: 7</p>`)
+		inOrder(t, body, `<section class="popular"`, `<li><a href="/posts/pa">PA</a><p class="meta">`,
+			`<span class="sr">Views</span>7</span>`, `<span class="sr">Like</span>2</span>`, `<span class="sr">Dislike</span>1</span>`)
 		if strings.Contains(body[strings.Index(body, `<section class="popular"`):], `href="/rss.xml"`) {
 			t.Error("popular block repeats the RSS link of the top bar")
 		}

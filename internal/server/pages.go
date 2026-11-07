@@ -111,6 +111,7 @@ type yearGroup struct {
 type popularPost struct {
 	*content.Post
 	Views int64
+	store.Votes
 }
 
 type pages struct {
@@ -482,10 +483,14 @@ func yearGroups(page, list []*content.Post) []yearGroup {
 // popular is the posts by views in the last POPULAR_DAYS days (today included), most viewed first.
 func (p *pages) popular(ctx context.Context, ix *content.Index) []popularPost {
 	viewed, _ := p.store.Popular(ctx, store.Day(time.Now().AddDate(0, 0, 1-p.cfg.PopularDays))) // error logged by store
+	if len(viewed) == 0 {
+		return nil
+	}
+	votes, _ := p.store.VoteCounts(ctx) // error logged by store; counts show as 0
 	var out []popularPost
 	for _, v := range viewed {
 		if post := ix.Get(v.Slug); post != nil {
-			out = append(out, popularPost{post, v.Views})
+			out = append(out, popularPost{post, v.Views, votes[v.Slug]})
 		}
 	}
 	return out

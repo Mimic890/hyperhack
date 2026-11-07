@@ -53,6 +53,7 @@
   "posts_one": "{n} post",
   "posts_many": "{n} posts",
   "views": "Views: {n}",
+  "views_label": "Views",
   "like": "Like",
   "dislike": "Dislike",
   "helpful": "Was this post helpful?",

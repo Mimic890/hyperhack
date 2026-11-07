@@ -421,7 +421,10 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 .popular ol { margin: 0; padding-left: 1.25rem; }
 .popular li::marker { color: var(--muted); }
 .popular li + li { margin-top: 0.75rem; }
-.popular .meta { margin: 0.125rem 0 0; }
+.popular .meta { margin: 0.125rem 0 0; gap: 0.25rem 1.25rem; }
+.popular .stats { display: inline-flex; gap: 0.75rem; }
+.popular .stat { display: inline-flex; align-items: center; gap: 0.3rem; }
+.popular .stat svg { width: 1em; height: 1em; flex: none; }
 
 .error h1 { margin: 0 0 0.75rem; font-size: 2rem; letter-spacing: -0.02em; }
 

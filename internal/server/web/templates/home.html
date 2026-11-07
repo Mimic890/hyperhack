@@ -68,7 +68,7 @@
     <h2 class="section-title">{{t "popular"}}</h2>
     <ol>
       {{- range .Popular}}
-      <li><a href="/posts/{{.Slug}}">{{.Title}}</a><p class="meta">{{t "views" "n" .Views}}</p></li>
+      <li><a href="/posts/{{.Slug}}">{{.Title}}</a><p class="meta"><span class="stat"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></g></svg><span class="sr">{{t "views_label"}}</span>{{.Views}}</span><span class="stats"><span class="stat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v10H4V10h3Zm2 10h8.2a2 2 0 0 0 2-1.6l1.2-6A2 2 0 0 0 18.4 10H14V5.5A2.5 2.5 0 0 0 11.5 3L9 10v10Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="sr">{{t "like"}}</span>{{.Likes}}</span><span class="stat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V4h3v10h-3Zm-2-10H6.8a2 2 0 0 0-2 1.6l-1.2 6A2 2 0 0 0 5.6 14H10v4.5a2.5 2.5 0 0 0 2.5 2.5L15 14V4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="sr">{{t "dislike"}}</span>{{.Dislikes}}</span></span></p></li>
       {{- end}}
     </ol>
   </section>
