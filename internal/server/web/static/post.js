@@ -169,6 +169,8 @@
   const share = article.querySelector(".share");
   if (share && (navigator.share || clip)) {
     share.hidden = false;
+    const shareStatus = votes.querySelector(".share-status");
+    let shareTimer;
     share.addEventListener("click", async () => {
       if (navigator.share) {
         try {
@@ -180,7 +182,14 @@
       }
       try {
         await clip.writeText(pageURL());
-        status.textContent = votes.dataset.linkCopied;
+        // The icon turns into a check mark; the text is only for screen readers.
+        shareStatus.textContent = votes.dataset.linkCopied;
+        share.classList.add("done");
+        clearTimeout(shareTimer);
+        shareTimer = setTimeout(() => {
+          share.classList.remove("done");
+          shareStatus.textContent = "";
+        }, 1500);
       } catch {
         // nothing to copy with: no message
       }
