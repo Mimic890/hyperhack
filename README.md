@@ -216,7 +216,7 @@ blocks:
 | `tags` | `limit` 1–20, default 6 | "All posts" and the most used tags with post counts. |
 | `featured` | none | The latest post as a card. |
 | `posts` | `group: year` or `none` (default), `limit` 1–100, default `PAGE_SIZE` | Post list with pagination, without the `featured` post. Only the first `posts` block is used. |
-| `popular` | `limit` 1–10, default 4 | Most viewed posts of the last `POPULAR_DAYS` days. Hidden until there are views. |
+| `popular` | `limit` 1–10, default 4 | Most viewed posts of the last `POPULAR_DAYS` days, with views, likes and dislikes. Hidden until there are views. |
 
 - Blocks appear from top to bottom in file order. Pages 2 and on show only the `posts` block.
 - `area: side` puts any block into a right column on screens from 860 px; below that it goes after the others.
