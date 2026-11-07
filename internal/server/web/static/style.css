@@ -22,45 +22,45 @@
 
 /* Theme tokens. Light by default; dark from the system unless the cookie says light. */
 :root {
-  --bg: #F6F5FB;
-  --raise: #FFFFFF;
-  --line: #E2E0EE;
-  --text: #1B1930;
-  --muted: #5D5A75;
-  --uv: #5B3DE6;
-  --ember: #B9541F;
-  --uv-soft: rgba(91,61,230,.10);
+  --bg: #FFFFFF;
+  --raise: #F5F5F5;
+  --line: #E5E5E5;
+  --text: #171717;
+  --muted: #5C5C5C;
+  --uv: #2563EB;
+  --ember: #2563EB;
+  --uv-soft: rgba(37,99,235,.10);
   --gutter: 32px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #101119;
-    --raise: #171925;
-    --line: #262938;
-    --text: #E7E5F2;
-    --muted: #9C99B3;
-    --uv: #8B6CFF;
-    --ember: #FF8F57;
-    --uv-soft: rgba(139,108,255,.14);
+    --bg: #0A0A0A;
+    --raise: #171717;
+    --line: #262626;
+    --text: #EDEDED;
+    --muted: #A3A3A3;
+    --uv: #3B82F6;
+    --ember: #3B82F6;
+    --uv-soft: rgba(59,130,246,.14);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #101119;
-  --raise: #171925;
-  --line: #262938;
-  --text: #E7E5F2;
-  --muted: #9C99B3;
-  --uv: #8B6CFF;
-  --ember: #FF8F57;
-  --uv-soft: rgba(139,108,255,.14);
+  --bg: #0A0A0A;
+  --raise: #171717;
+  --line: #262626;
+  --text: #EDEDED;
+  --muted: #A3A3A3;
+  --uv: #3B82F6;
+  --ember: #3B82F6;
+  --uv-soft: rgba(59,130,246,.14);
   color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 /* The padding keeps anchors and focused elements clear of the sticky top bar. */
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-top: 88px; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-padding-top: 76px; }
 body {
   margin: 0;
   background: var(--bg);
@@ -80,7 +80,7 @@ img { max-width: 100%; height: auto; }
 .topbar {
   position: sticky; top: 0; z-index: 10;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-  height: 72px; padding-inline: max(var(--gutter), (100% - 1180px) / 2);
+  height: 60px; padding-inline: max(var(--gutter), (100% - 1180px) / 2);
   border-bottom: 1px solid var(--line);
   background: var(--bg);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
@@ -90,7 +90,12 @@ img { max-width: 100%; height: auto; }
 .brand span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .brand:hover span { text-decoration: underline; text-underline-offset: 0.2em; }
 .progress { display: none; }
-.bar-title { display: none; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--muted); font-size: 0.9375rem; }
+/* Post title in the middle of the bar: small, up to two lines, shown by post.js once the page title is out of view. */
+.bar-title {
+  visibility: hidden; opacity: 0;
+  display: none; min-width: 0; overflow: hidden; color: var(--muted); font-size: 0.8125rem; line-height: 1.3; text-align: center;
+  -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
 .logo { display: block; flex: none; width: 40px; height: 29px; object-fit: contain; object-position: left center; }
 svg.logo { color: var(--text); }
 svg.logo path { stroke: var(--bg); }
@@ -108,7 +113,7 @@ svg.logo path { stroke: var(--bg); }
 /* Search button on the main page. Its shortcut needs JS, so without JS the hint stays hidden. */
 .tools .search-field {
   display: inline-flex; align-items: center; gap: 0.5rem;
-  width: 240px; height: 44px; margin-right: 0.5rem; padding: 0 0.75rem;
+  width: 240px; height: 36px; margin-right: 0.5rem; padding: 0 0.75rem;
   border: 1px solid var(--line); border-radius: 12px; background: var(--raise); color: var(--muted);
   font-size: 0.9375rem; text-decoration: none;
 }
@@ -158,7 +163,12 @@ main > .home { max-width: none; }
 .top-tags .tag { padding: 0.375rem 0.875rem; font-size: 0.9375rem; }
 .tag .n { margin-left: 0.4em; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .tag[aria-current] { border-color: var(--uv); }
-.featured { display: flex; gap: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--raise); }
+/* Tinted with --uv so the newest post stands apart from the page. */
+.featured {
+  display: flex; gap: 20px; padding: 20px; border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+}
 .featured img { flex: none; align-self: flex-start; width: 25%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; }
 .featured-body { flex: 1; min-width: 0; }
 .featured .label { margin: 0 0 0.25rem; color: var(--ember); font-size: 0.875rem; font-weight: 650; }
@@ -276,6 +286,10 @@ main > .post { max-width: none; }
 .toc a:focus-visible { outline-offset: -2px; }
 .toc a[aria-current] { border-left-color: var(--uv); color: var(--text); font-weight: 600; }
 .toc-side { display: none; }
+/* The sliding bar from post.js replaces the active item's own --uv line. */
+.toc-side.has-ink a[aria-current] { border-left-color: var(--line); }
+.toc-ink { position: absolute; left: 0; width: 2px; border-radius: 2px; background: var(--uv); opacity: 0; pointer-events: none; }
+.toc-ink.on { opacity: 1; }
 .toc-details { margin-bottom: 1.5rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--raise); }
 .toc-details summary { display: flex; align-items: center; min-height: 44px; font-weight: 600; cursor: pointer; }
 .toc-details summary::before { content: "›"; content: "›" / ""; width: 1em; color: var(--muted); }
@@ -285,11 +299,15 @@ main > .post { max-width: none; }
   .toc a { min-height: 44px; }
 }
 @media (min-width: 1000px) {
-  .bar-title { display: block; }
+  .bar-title { display: -webkit-box; }
+  /* Equal side columns keep the title centered while both sides fit. */
+  .topbar:has(.bar-title) { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, 36rem) minmax(max-content, 1fr); }
+  .topbar:has(.bar-title) .tools { justify-self: end; }
+  .topbar.past-title .bar-title { visibility: visible; opacity: 1; }
   .banner + main .post-head { margin-top: -150px; }
   .post-grid { display: grid; grid-template-columns: minmax(0, 680px) 250px; gap: 80px; align-items: start; }
   .toc-details { display: none; }
-  .toc-side { display: block; position: sticky; top: 96px; max-height: calc(100vh - 120px); overflow-y: auto; }
+  .toc-side { display: block; position: sticky; top: 84px; max-height: calc(100vh - 108px); overflow-y: auto; }
 
   /* Heading markers hang in the margin: 14px mono, so ### fits the 32px gutter. */
   .prose > h2, .prose > h3 { position: relative; }
@@ -383,22 +401,30 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 .votes[aria-busy="true"] .vote { opacity: 0.6; }
 .vote-status { margin: 0; }
 .votes-question { margin-right: 0.25rem; font-weight: 600; }
-.share { margin-left: auto; }
+.share { margin-left: auto; justify-content: center; width: 44px; padding: 0; }
 .share[hidden] { display: none; }
+.share.done { color: var(--text); }
+.share.done svg { display: none; }
+.share.done::before {
+  content: ""; width: 18px; height: 18px; background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 
 /* Cards below the votes. */
 .post-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 1.5rem; }
-.post-card { display: flex; flex-direction: column; justify-content: center; min-height: 88px; padding: 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--raise); color: var(--text); text-decoration: none; }
+.post-card { display: flex; flex-direction: column; justify-content: center; min-height: 64px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--raise); color: var(--text); text-decoration: none; }
 .post-card:hover { border-color: var(--uv); }
 .post-card .label { color: var(--muted); font-size: 0.875rem; }
-.post-card strong { font-weight: 650; line-height: 1.3; }
+.post-card strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-weight: 650; line-height: 1.3; }
 
 /* Popular */
 .popular ol { margin: 0; padding-left: 1.25rem; }
 .popular li::marker { color: var(--muted); }
 .popular li + li { margin-top: 0.75rem; }
-.popular .meta { margin: 0.125rem 0 0; }
-.rss-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 0.5rem; font-weight: 600; }
+.popular .meta { margin: 0.125rem 0 0; gap: 0.25rem 1.25rem; }
+.popular .stats { display: inline-flex; gap: 0.75rem; }
+.popular .stat { display: inline-flex; align-items: center; gap: 0.3rem; }
+.popular .stat svg { width: 1em; height: 1em; flex: none; }
 
 .error h1 { margin: 0 0 0.75rem; font-size: 2rem; letter-spacing: -0.02em; }
 
@@ -413,6 +439,7 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
   .banner { height: 260px; }
   .post-head h1 { font-size: 2.125rem; }
   .post-nav { grid-template-columns: 1fr; }
+  .votes-question { flex-basis: 100%; } /* the buttons and Share then share one row */
   .intro h1, .intro h2 { font-size: 2.125rem; }
   .row { grid-template-columns: auto 1fr; }
   .row > div { grid-column: 1 / -1; grid-row: 2; }
@@ -424,6 +451,12 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 }
 /* Motion. TestMotionGated keeps all of it in this block. */
 @media (prefers-reduced-motion: no-preference) {
+  /* Contents bar: the leading edge moves first, the trailing one 90 ms later. */
+  .toc-ink { transition: top 320ms cubic-bezier(0.3, 0.7, 0.2, 1), bottom 320ms cubic-bezier(0.3, 0.7, 0.2, 1), opacity 160ms; }
+  .toc-ink.down { transition-delay: 90ms, 0ms, 0ms; }
+  .toc-ink.up { transition-delay: 0ms, 90ms, 0ms; }
+  .toc-ink.jump { transition: none; }
+  .bar-title { transition: opacity 160ms ease-out, visibility 160ms; }
   html { scroll-behavior: smooth; }
 
   /* List to post. transition.js names the title and the cover. */

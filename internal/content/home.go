@@ -99,7 +99,10 @@ func ParseHome(src []byte) ([]Block, []string) {
 			problems = append(problems, fmt.Sprintf("more than %d blocks, the rest are ignored", maxHomeBlocks))
 			break
 		}
-		b, err := parseBlock(&f.Blocks[i])
+		b, ignored, err := parseBlock(&f.Blocks[i])
+		for _, e := range ignored {
+			problems = append(problems, fmt.Sprintf("block %d: %v", i+1, e))
+		}
 		if err == nil && b.Type == BlockPosts && hasPosts {
 			err = errors.New("only the first posts block is used")
 		}
@@ -116,9 +119,11 @@ func ParseHome(src []byte) ([]Block, []string) {
 	return blocks, problems
 }
 
-func parseBlock(n *yaml.Node) (Block, error) {
+// parseBlock reads one block. Only a block without a known type is skipped; a bad or
+// unknown field is ignored and reported, so one typo does not hide the rest of the block.
+func parseBlock(n *yaml.Node) (Block, []error, error) {
 	if n.Kind != yaml.MappingNode {
-		return Block{}, errors.New("not a mapping")
+		return Block{}, nil, errors.New("not a mapping")
 	}
 	var b Block
 	for i := 0; i+1 < len(n.Content); i += 2 {
@@ -128,9 +133,10 @@ func parseBlock(n *yaml.Node) (Block, error) {
 	}
 	spec, ok := blockSpecs[b.Type]
 	if !ok {
-		return Block{}, fmt.Errorf("unknown type %.40q", b.Type)
+		return Block{}, nil, fmt.Errorf("unknown type %.40q", b.Type)
 	}
 	b.Limit = spec.limitDefault
+	var ignored []error
 	for i := 0; i+1 < len(n.Content); i += 2 {
 		key, val := n.Content[i].Value, n.Content[i+1]
 		var err error
@@ -144,11 +150,20 @@ func parseBlock(n *yaml.Node) (Block, error) {
 				err = errors.New("must be main or side")
 			}
 		case key == "title" && spec.text:
-			b.Title, err = parseText(val, maxBlockTitle)
+			var t Text
+			if t, err = parseText(val, maxBlockTitle); err == nil {
+				b.Title = t
+			}
 		case key == "text" && spec.text:
-			b.Text, err = parseText(val, maxBlockText)
+			var t Text
+			if t, err = parseText(val, maxBlockText); err == nil {
+				b.Text = t
+			}
 		case key == "limit" && spec.limitMax > 0:
-			b.Limit, err = parseLimit(val, spec.limitMax)
+			var l int
+			if l, err = parseLimit(val, spec.limitMax); err == nil {
+				b.Limit = l
+			}
 		case key == "group" && spec.group:
 			switch {
 			case val.Kind == yaml.ScalarNode && val.Value == "year":
@@ -160,19 +175,20 @@ func parseBlock(n *yaml.Node) (Block, error) {
 			err = errors.New("unknown field")
 		}
 		if err != nil {
-			return Block{}, fmt.Errorf("%.40s: %w", key, err)
+			ignored = append(ignored, fmt.Errorf("%.40s ignored: %w", key, err))
 		}
 	}
-	return b, nil
+	return b, ignored, nil
 }
 
-// parseText accepts a string or a map by language. An empty Obsidian property is no text.
+// parseText accepts a string or a map by language. An empty Obsidian property is no text,
+// and so is an empty language entry. A number or true/false is taken as its text.
 func parseText(n *yaml.Node, limit int) (Text, error) {
 	if n.ShortTag() == "!!null" {
 		return nil, nil
 	}
 	one := func(lang string, v *yaml.Node) (LocalText, error) {
-		if v.Kind != yaml.ScalarNode || v.ShortTag() != "!!str" {
+		if v.Kind != yaml.ScalarNode {
 			return LocalText{}, errors.New("must be text")
 		}
 		s := strings.TrimSpace(v.Value)
@@ -190,6 +206,9 @@ func parseText(n *yaml.Node, limit int) (Text, error) {
 		lang := n.Content[i].Value
 		if !langRe.MatchString(lang) {
 			return nil, errors.New("language must be two lower-case letters")
+		}
+		if v := n.Content[i+1]; v.ShortTag() == "!!null" || (v.Kind == yaml.ScalarNode && strings.TrimSpace(v.Value) == "") {
+			continue
 		}
 		e, err := one(lang, n.Content[i+1])
 		if err != nil {

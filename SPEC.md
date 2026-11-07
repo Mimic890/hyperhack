@@ -62,19 +62,41 @@ CSS custom properties. The theme mechanism does not change: `prefers-color-schem
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--bg` | `#101119` | `#F6F5FB` | page background |
-| `--raise` | `#171925` | `#FFFFFF` | cards, code, menus |
-| `--line` | `#262938` | `#E2E0EE` | borders, dividers |
-| `--text` | `#E7E5F2` | `#1B1930` | main text |
-| `--muted` | `#9C99B3` | `#5D5A75` | metadata, captions |
-| `--uv` | `#8B6CFF` | `#5B3DE6` | accent: links, `#`, active states |
-| `--ember` | `#FF8F57` | `#B9541F` | second accent: "New post", gradient end |
-| `--uv-soft` | `rgba(139,108,255,.14)` | `rgba(91,61,230,.10)` | background of active elements |
+| `--bg` | `#0A0A0A` | `#FFFFFF` | page background |
+| `--raise` | `#171717` | `#F5F5F5` | cards, code, menus |
+| `--line` | `#262626` | `#E5E5E5` | borders, dividers |
+| `--text` | `#EDEDED` | `#171717` | main text |
+| `--muted` | `#A3A3A3` | `#5C5C5C` | metadata, captions |
+| `--uv` | `#3B82F6` | `#2563EB` | accent: links, `#`, active states |
+| `--ember` | `#3B82F6` | `#2563EB` | second accent: "New post", gradient end; the same blue by default |
+| `--uv-soft` | `rgba(59,130,246,.14)` | `rgba(37,99,235,.10)` | background of active elements |
 
 - The `--uv` → `--ember` gradient appears only in the reading progress bar.
 - Text contrast is at least 4.5:1, checked in a test.
-- Text on `--uv-soft` is always `--text`. There `--uv` is only for icons and borders: as text it stays below 4.5:1 in the dark theme.
-- `--ember` text goes only on `--raise`: on `--bg` it stays below 4.5:1 in the light theme.
+- Text on `--uv-soft` is always `--text`. There `--uv` is only for icons and borders.
+- `--ember` text goes only on `--raise` or `--bg`, the pairs the contrast test checks.
+
+#### Own colors
+
+The owner can change every token, for each theme: `theme` in `home.md` for the whole site, `theme` in a post's frontmatter for that post's page.
+
+```yaml
+theme:
+  light:
+    background: "#F6F5FB"
+    text: "#1B1930"
+    accent: "#5B3DE6"
+  dark:
+    background: "#101119"
+    accent-soft: "#8B6CFF24"
+```
+
+- Names: `background` (`--bg`), `surface` (`--raise`), `border` (`--line`), `text` (`--text`), `muted` (`--muted`), `accent` (`--uv`), `accent-2` (`--ember`), `accent-soft` (`--uv-soft`).
+- Value: a hex color `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`; the last two digits are opacity, as `accent-soft` needs. The `#` may be left out. A color with `#` goes in quotes: in YAML an unquoted `#` starts a comment, and the service warns about that case.
+- Any color may be left out, and an empty value is no color. A post color wins over the `home.md` one, which wins over the built-in one.
+- An unknown name, a bad value or a key other than `light` / `dark` → only that entry is ignored, WARN; a post stays published. Nothing but a validated hex color reaches the CSS.
+- The service builds one stylesheet per color set, named by its content hash, and links it after `style.css`: `/static/theme/<hash>.css`. No inline styles, so the CSP stays as it is.
+- Contrast of own colors is the owner's choice and is not checked. Code highlighting keeps its palette.
 
 ### Typography
 
@@ -100,6 +122,8 @@ Everything is inside `@media (prefers-reduced-motion: no-preference)`. New CSS f
 3. Search palette: backdrop 120ms, window from `scale(.98)` and `opacity: 0` in 160ms.
 4. Like: `scale(.94)` on press, the number moves from bottom to top when it changes.
 5. Language menu: appears in 120ms.
+6. Post title in the top bar: fades in and out in 160ms.
+7. Side table of contents: one `--uv` bar slides to the active item in 320ms. The leading edge moves first and the trailing one 90ms later, so the bar stretches on the way and settles to the item's height. `post.js` sets `top` and `bottom` through the CSSOM. With reduced motion it jumps.
 
 No other animations on load or on card hover.
 
@@ -114,18 +138,18 @@ No other animations on load or on card hover.
 
 ### Top bar
 
-- On all pages. Height 72px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
+- On all pages. Height 60px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
 - Left: logo in a 40×29px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
-- On post pages at ≥ 1000px: the post title next to the logo, `--muted`, cut with `ellipsis`.
-- Right, left to right: search button, theme toggle, language dropdown (`en` / `ru`), RSS link, author's GitHub link (URL from `.env`).
-- Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
+- On post pages at ≥ 1000px: the post title in the middle of the bar, 13px `--muted`, centered, at most two lines (`line-clamp: 2`), up to 36rem wide. It appears (160 ms fade) only after the page title has scrolled under the bar, so the two titles are never seen together; `post.js` watches the `h1` with an `IntersectionObserver`. Without JS it stays hidden. Below 1000px the bar has no title.
+- Right, left to right: search button, theme toggle, RSS link, author's GitHub link (URL from `.env`), language dropdown (`en` / `ru`) last.
+- Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px, height 36px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
 - Language dropdown: a borderless button `RU ▾`, menu on `--raise`, radius 14px, shadow, active language in `--uv`.
 
 ### Main page
 
 Built from blocks listed in `home.md`, a file in the vault root. The name is reserved: this file is not a post and stays out of the index, search, RSS, sitemap, `/llms.txt` and `/posts/<slug>.md`. A `home.md` in a subfolder is an ordinary post candidate. The name has no `_` because Remotely Save does not sync such files.
 
-The file holds only YAML frontmatter with a `blocks` list; its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
+The file holds only YAML frontmatter with a `blocks` list and an optional `theme` (see Design → Colors → Own colors); its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
 
 ```yaml
 ---
@@ -148,15 +172,15 @@ blocks:
 |---|---|---|
 | `intro` | `title`, `text` (both optional) | Heading 46px / 800 and `--muted` subtitle, width ≤ 720px. Without both fields it renders nothing. |
 | `tags` | `limit` (1–20, default 6) | Chip "All posts" and the most used tags: by number of published posts, ties by name. Each chip: `#` in `--uv`, name, post count in `--muted`. |
-| `featured` | none | The latest post. Card on `--raise` with a border, radius 20px, padding 20px. Left: cover at 1/4 width (`4/3`, radius 14px). Right: "New post" in `--ember`, title 30px, description, date, reading time, tags. No cover: text at full width. |
-| `posts` | `group: year \| none` (default `none`), `limit` (1–100, default `PAGE_SIZE`) | Post list with pagination. Row: date on the left (92px), title 21px / 650 with `--muted` description, reading time on the right. With `year`: year headings 40px / 800 with the year's post count in this list, and dates without the year. |
-| `popular` | `limit` (1–10, default 4) | Numbered list (1, 2, 3…) with views in the `POPULAR_DAYS` window. At the bottom: link "Subscribe via RSS". |
+| `featured` | none | The latest post. Card on `--raise` with a `--line` border, radius 20px, padding 20px. Left: cover at 1/4 width (`4/3`, radius 14px). Right: "New post" in `--ember`, title 30px, description, date, reading time, tags. No cover: text at full width. |
+| `posts` | `group: year \| none` (default `none`), `limit` (1–100, default `PAGE_SIZE`) | Post list with pagination. Row: date on the left (92px), title 21px / 650 with `--muted` description, reading time on the right. With `year`: year headings 40px / 800 with the year's post count in this list as words ("5 posts"; Russian "1 пост / 2 поста / 5 постов"), and dates without the year. |
+| `popular` | `limit` (1–10, default 4) | Numbered list (1, 2, 3…). Under each title: an eye icon with views in the `POPULAR_DAYS` window, then like and dislike icons with the current vote counts, icons at text size, a wider gap between views and votes. Each icon has a visually hidden label. No RSS link: the top bar has one. |
 
 - `area: main | side` on any block, default `main`. `side` is a right column of 300px at ≥ 860px; below that, side blocks go after the main ones.
 - Text fields are a string or a map by language: `title: {ru: "…", en: "…"}`. Language keys are two lower-case letters. No entry for the UI language: the first one in the file.
 - Plain text only, escaped by the template. `title` ≤ 200 characters, `text` ≤ 500. At most 20 blocks; the rest are ignored with WARN.
 - No `home.md`, invalid YAML, no `blocks` or none of them valid → default set: the example above without `intro` text, and WARN.
-- Unknown `type` or invalid field → the block is skipped, WARN.
+- Unknown or missing `type` → the block is skipped, WARN. An invalid or unknown field → only that field is ignored, WARN; the block keeps its other fields and the defaults, so an `intro` keeps its title when its `text` is broken. An empty value, also for one language in a map, is no text. A number or `true`/`false` is taken as its text.
 - WARNs repeat only when the file changes, not on every poll.
 - Only the first `posts` block is used, since a page has one pagination; others are skipped with WARN.
 - The `featured` post does not repeat in `posts`, on any page.
@@ -169,10 +193,10 @@ blocks:
 - Banner: the cover (`cover`) above the title at full window width, height `min(48vh, 460px)`, 260px at ≤ 640px, `object-fit: cover`, no rounded corners. Its lower part fades into `--bg`: a gradient `transparent 30%` → `--bg 100%` over the image, and `backdrop-filter: blur(14px)` under the mask `linear-gradient(to bottom, transparent, #000 70%)` in the lower 45%. The `<img>` keeps `width`/`height`. No cover: no banner.
 - Post header: aligned to the left edge of the text column, overlaps the banner by 150px (100px at < 1000px); no overlap without a banner. Order: tags, title, metadata (date, `updated` if set, reading time, views). Over a banner the metadata is `--text` and the title has a `--bg` halo (`text-shadow`), so both stay readable on any cover.
 - Grid: text (`max-width: 680px`) on the left, table of contents 250px on the right, gap 80px. Below 1000px the contents move into `<details>` "Contents" above the text.
-- Table of contents: built on the server from h2–h4, which already have ids. A tree: h3 indented 30px, h4 46px with a smaller font. Each item has a 2px `--line` line on its left. Active item: `--text`, `--uv` line, weight 600; its parent h2 is `--text` too. The column is `position: sticky; top: 96px`. `post.js` marks the active item with `IntersectionObserver`. No headings: no contents.
+- Table of contents: built on the server from h2–h4, which already have ids. A tree: h3 indented 30px, h4 46px with a smaller font. Each item has a 2px `--line` line on its left. Active item: `--text`, `--uv` line, weight 600; its parent h2 is `--text` too. In the side column the `--uv` line is one sliding bar (see Motion). The column is `position: sticky; top: 84px`. `post.js` marks the active item: the last heading that has reached the top bar (+32px), where a contents link puts it; at the end of the page the last visible heading. A clicked item stays active until the reader scrolls (wheel, touch, key), so a short section does not hand it to the next heading. No headings: no contents.
 - Heading markers: `##` hangs in the margin left of h2 and `###` left of h3. CSS `::before`, not text; JetBrains Mono, `--uv`, opacity 0.6 and 0.45. Brighter on hover; a click copies the link to the section (JS). None below 1000px.
 - Code blocks and callouts: see Content features.
-- Post footer: "Was this post helpful?", like, dislike. On the right, "Share": `navigator.share()` with title and URL when available, otherwise copies the URL and says "Link copied" in `role="status"`. No button without JS. Below, two cards: "Previous post" (the next older one, if any) and "All posts".
+- Post footer: "Was this post helpful?", like, dislike. On the right, "Share" as a 44px icon button (three linked dots, the label in `aria-label` and `title`): `navigator.share()` with title and URL when available, otherwise copies the URL, and the icon turns into a check mark in `--text` for 1.5 s; "Link copied" goes only to a visually hidden `role="status"`. No button without JS. Below, two cards: "Previous post" (the next older one, if any) and "All posts". Cards: min height 64px, padding 12px 18px, radius 16px, title at most two lines. At ≤ 640px the question takes its own row, the buttons and "Share" the next.
 
 ## Configuration
 
@@ -287,6 +311,7 @@ Post text…
 | `slug` | string | no | URL part. Default: from the file name. |
 | `lang` | string | no | Post language, ISO 639-1 (`en`, `ru`). Default: `DEFAULT_LANG`. Used in `<html lang>`, RSS, meta tags. |
 | `draft` | bool | no | `true` — not published. Default `false`. |
+| `theme` | map | no | Colors of this post page over the site ones. See Design → Colors → Own colors. |
 
 Rules:
 
@@ -553,7 +578,7 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 | `/healthz` | GET | public | constant body, no data |
 | `/prefs` | POST | public | form body ≤ 4 KB, enum check for `theme` / `lang`, redirect only to a local path |
 | `/favicon.ico` | GET | public | built-in SVG mark, or `302` to `/assets/logo.svg` when the bucket has a logo; never `404` |
-| `/static/*` | GET | public | embedded CSS, JS and fonts only, no directory listing |
+| `/static/*` | GET | public | embedded CSS, JS and fonts, and `/static/theme/<hash>.css` built from validated colors (unknown hash → `404`); no directory listing |
 | `/<INDEXNOW_KEY>.txt` | GET | public | only if `INDEXNOW_KEY` is set; body is the key |
 
 Other methods → `405`. Unknown paths → `404`.
@@ -567,6 +592,7 @@ Other methods → `405`. Unknown paths → `404`.
 - Enums only: vote (`like` / `dislike` / `none`), source, device, theme, lang. Other values → `400`.
 - Search query: max 200 chars, max 10 terms, `#tag` tokens included. The query is built in code (match + fuzzy + prefix), never from Bleve query-string syntax: this blocks regex and wildcard DoS. Fuzziness ≤ 2, prefix min 2 chars. Page number bounded.
 - Cookies `lang` and `theme`: enum check; invalid → default.
+- Theme colors from `home.md` and posts: known names only, values only hex colors. Anything else is ignored.
 
 ### Output and XSS
 
@@ -758,3 +784,10 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-06 — Search palette details: `search.js` loads on every page and also serves the live results on `/search`, so the palette needs no new endpoint. `#tag` tokens stay out of the stored search queries: only words are stored, so typed tags cannot fill the table. Past either end of the list nothing is selected, and `Enter` opens the results page, the only way from the palette to results beyond the first page.
 - 2026-11-07 — Motion details: `transition.js` is the only blocking script, because a deferred one misses `pagereveal`. The cover name goes on the whole banner, so the fade stays during the transition, and the post header gets its own name, so the cover does not paint over tags and metadata. Names go on block boxes only, since a wrapped inline link would skip the transition. `scale(.94)` and the number animation apply to like and dislike.
 - 2026-11-07 — Math and diagrams in Obsidian syntax. Math: `$…$` / `$$…$$` turned into MathML on the server with `treeblood` `v0.1.16` and an own goldmark parser (the `goldmark-treeblood` wrapper treats any `$` as math); MathML allowlist in `bluemonday`. Diagrams: ` ```mermaid ` drawn in the browser by Pele 1.13.0, vendored and loaded only on posts that have one; Pele style attributes move to CSSOM, so the CSP stays as it is; zoom off. Fallback in both: the source stays visible.
+- 2026-11-07 — Top bar and featured card: the language dropdown moves to the right end of the top bar (its own `/prefs` form). The main page search button is 36px high instead of 44px. The featured card gets a `--uv` tint so it stands out from the page; its "New post" label mixes `--ember` with 20% `--text`, because plain `--ember` on the light tint measured 4.24:1 (now 5.57:1 light, 8.01:1 dark). The top bar is 60px instead of 72px; on post pages the title sits in the middle of the bar, centered, up to two lines. "Share" becomes an icon button. The cards below the votes are lower: min height 64px instead of 88px, title at most two lines.
+- 2026-11-07 — Main page: the `popular` block loses its "Subscribe via RSS" link, since the top bar already has RSS. A bad or unknown field in a `home.md` block no longer skips the whole block: only that field is ignored with WARN (the typo is still reported). An empty language entry is no text instead of an error, and a number is text, because clearing one language of `text` in the vault dropped the whole `intro` with its title.
+- 2026-11-07 — Table of contents: the active `--uv` line in the side column becomes one bar that slides between items and stretches on the way (leading edge first, trailing edge 90ms later, 320ms). Position through the CSSOM, so the CSP stays; no animation with reduced motion. The fade of the top bar title is now listed in Motion too.
+- 2026-11-07 — Year headings say "5 posts" instead of a bare number. Plural forms come from `key_one`, `key_few`, `key_many` in the i18n files; a language with a `_few` form uses the Russian rule, others the English one.
+- 2026-11-07 — Own colors: `theme` with `light` and `dark` maps in `home.md` sets any color token of the site, and the same field in a post sets its page; missing colors fall back to `home.md`, then the built-in ones. Only hex values pass, and the colors go out as a separate content-hashed stylesheet under `/static/theme/`, so the CSP needs no inline styles. A bad entry is ignored with WARN, as in `home.md` blocks.
+- 2026-11-07 — The `popular` block shows likes and dislikes next to views, and an eye icon instead of the word "Views". The votes come from one query for all posts, made only when the block has posts.
+- 2026-11-07 — Built-in palette: plain neutral dark (`#0A0A0A`) and white (`#FFFFFF`) with gray surfaces, borders and secondary text; the only color is a plain blue accent (`#2563EB` light, `#3B82F6` dark), also used for `--ember`, `--uv-soft` and the favicon. The featured card loses its tint and sits on `--raise`. Code highlighting keeps its palette. Own colors in `home.md` work as before.

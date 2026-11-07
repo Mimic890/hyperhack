@@ -53,6 +53,7 @@ func New(log *slog.Logger, cfg *config.Config, d Deps) http.Handler {
 	mux.HandleFunc("POST /api/beacon", p.apiBeacon)
 	mux.HandleFunc("GET /metrics", p.metricsPage)
 	mux.HandleFunc("GET /static/fonts/{file}", p.font)
+	mux.HandleFunc("GET /static/theme/{file}", p.theme)
 	mux.HandleFunc("GET /", p.notFound)
 	mux.Handle("POST /reindex", reindex(p.log, cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies, p.limit(p.lim.reindex, "reindex"), d.Sync))
 	// The "GET /" catch-all would answer GET on POST-only paths with 404; SPEC wants 405.

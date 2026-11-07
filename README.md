@@ -170,6 +170,7 @@ Post text…
 | `slug` | string | no | URL part. Default: made from the file name. |
 | `lang` | string | no | Post language, two lower-case letters (`en`, `ru`). Default: `DEFAULT_LANG`. |
 | `draft` | bool | no | `true` keeps the post unpublished. Default `false`. |
+| `theme` | map | no | Colors of this post's page. Same format as in `home.md`, see [Colors](#colors). |
 
 Rules:
 
@@ -215,13 +216,45 @@ blocks:
 | `tags` | `limit` 1–20, default 6 | "All posts" and the most used tags with post counts. |
 | `featured` | none | The latest post as a card. |
 | `posts` | `group: year` or `none` (default), `limit` 1–100, default `PAGE_SIZE` | Post list with pagination, without the `featured` post. Only the first `posts` block is used. |
-| `popular` | `limit` 1–10, default 4 | Most viewed posts of the last `POPULAR_DAYS` days and an RSS link. Hidden until there are views. |
+| `popular` | `limit` 1–10, default 4 | Most viewed posts of the last `POPULAR_DAYS` days, with views, likes and dislikes. Hidden until there are views. |
 
 - Blocks appear from top to bottom in file order. Pages 2 and on show only the `posts` block.
 - `area: side` puts any block into a right column on screens from 860 px; below that it goes after the others.
 - `title` and `text` are a string or a map by language. With no entry for the reader's language, the first one is used.
-- An unknown `type`, an unknown field or an invalid value skips the block. With no `home.md`, invalid YAML or no valid blocks, the default blocks are used. Each case logs a WARN once, when the file changes or at startup.
+- An unknown or missing `type` skips the block. An unknown field or an invalid value skips only that field, so a block keeps the rest: an `intro` with a broken `text` still shows its title. An empty value, also for one language, means no text. With no `home.md`, invalid YAML or no valid blocks, the default blocks are used. Each case logs a WARN once, when the file changes or at startup.
 - When upgrading: a `home.md` in the root that was a post stops being one, so rename it. `POPULAR_LIMIT` in `.env` no longer has any effect.
+
+### Colors
+
+`theme` in `home.md`, next to `blocks`, changes the site colors for the light and the dark theme:
+
+```yaml
+theme:
+  light:
+    background: "#F6F5FB"
+    text: "#1B1930"
+    accent: "#5B3DE6"
+  dark:
+    background: "#101119"
+    accent-soft: "#8B6CFF24"
+```
+
+| Name | What it colors | Light | Dark |
+|---|---|---|---|
+| `background` | page background | `#FFFFFF` | `#0A0A0A` |
+| `surface` | cards, code, menus | `#F5F5F5` | `#171717` |
+| `border` | borders, dividers | `#E5E5E5` | `#262626` |
+| `text` | main text | `#171717` | `#EDEDED` |
+| `muted` | dates, captions, descriptions | `#5C5C5C` | `#A3A3A3` |
+| `accent` | links, `#`, active items | `#2563EB` | `#3B82F6` |
+| `accent-2` | "New post", end of the progress bar | `#2563EB` | `#3B82F6` |
+| `accent-soft` | background of active items and callouts | `#2563EB1A` | `#3B82F624` |
+
+- A value is a hex color: `#rgb`, `#rrggbb`, or with two more digits for opacity (`#rrggbbaa`). Put it in quotes: in YAML `#` without quotes starts a comment. `1b1930` without `#` also works.
+- Leave out any color to keep the built-in one.
+- The same `theme` field in a post's frontmatter changes only that post's page. Colors the post leaves out come from `home.md`, then the built-in ones.
+- An unknown name or a bad value is ignored with a WARN in the log; the rest of the theme and the post still work.
+- Contrast is up to you: the service does not check it. Code highlighting keeps its own colors.
 
 ## Publishing from Obsidian
 

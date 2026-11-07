@@ -46,6 +46,8 @@ type Post struct {
 	Diagrams    bool          // has ```mermaid blocks: the page loads the diagram scripts
 	Source      []byte        // the raw .md file, served at /posts/<slug>.md
 	Outbound    []string      // hosts of external links: the only allowed outbound-click labels
+	Theme       Theme         // colors of this post over the site theme
+	Warnings    []string      // ignored frontmatter fields, for WARN logs
 }
 
 const maxFrontmatter = 64 << 10
@@ -67,6 +69,7 @@ type frontmatter struct {
 	Slug        string     `yaml:"slug"`
 	Lang        string     `yaml:"lang"`
 	Draft       bool       `yaml:"draft"`
+	Theme       yaml.Node  `yaml:"theme"`
 }
 
 // stringList accepts a YAML list or a single string.
@@ -146,6 +149,9 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 		if p.Slug = Slugify(strings.TrimSuffix(base, path.Ext(base))); p.Slug == "" {
 			return nil, errors.New("no slug: set slug in frontmatter")
 		}
+	}
+	if f.Theme.Kind != 0 {
+		p.Theme, p.Warnings = parseTheme(&f.Theme)
 	}
 	p.Words = len(bytes.Fields(body))
 	if p.HTML, err = r.render(body, p.Lang); err != nil {

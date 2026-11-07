@@ -101,15 +101,54 @@
     article.querySelectorAll(".depth").forEach((m) => io.observe(m));
   }
 
-  // Contents: the active item is the last heading above the line at 35% of the window.
+  // Contents: the active item is the last heading that has reached the top, where a
+  // contents link puts it. At the end of the page the last visible heading wins, since
+  // short sections there never reach the top. A clicked item stays active until the
+  // reader scrolls: a short section would otherwise hand it to the next heading.
   // An item for h3 or h4 also marks its parent h2.
   const heads = [...article.querySelectorAll(".prose h2[id], .prose h3[id], .prose h4[id]")];
   const items = article.querySelectorAll(".toc a");
-  if (items.length && "IntersectionObserver" in globalThis) {
-    let active;
+  if (items.length) {
+    let active, pinned, queued;
+    // One --uv bar slides between the side contents items. Moving down, its bottom edge
+    // leads and the top follows (up: the reverse), so it stretches on the way.
+    const side = article.querySelector(".toc-side");
+    const ink = document.createElement("span");
+    ink.className = "toc-ink";
+    if (side) {
+      side.append(ink);
+      side.classList.add("has-ink");
+    }
+    const moveInk = () => {
+      const a = side?.querySelector("a[aria-current]");
+      if (!a) {
+        ink.classList.remove("on");
+        return;
+      }
+      const top = a.offsetTop;
+      const bottom = side.clientHeight - top - a.offsetHeight;
+      if (!ink.classList.contains("on")) {
+        ink.classList.add("jump"); // first show: appear in place, no slide from the top
+        ink.style.top = top + "px";
+        ink.style.bottom = bottom + "px";
+        ink.getBoundingClientRect();
+        ink.classList.remove("jump");
+        ink.classList.add("on");
+        return;
+      }
+      const down = top > parseFloat(ink.style.top);
+      ink.classList.toggle("down", down);
+      ink.classList.toggle("up", !down);
+      ink.style.top = top + "px";
+      ink.style.bottom = bottom + "px";
+    };
     const mark = () => {
-      const line = innerHeight * 0.35;
-      const cur = heads.findLast((h) => h.getBoundingClientRect().top <= line);
+      queued = false;
+      const top = (document.querySelector(".topbar")?.offsetHeight || 0) + 32;
+      let cur = pinned || heads.findLast((h) => h.getBoundingClientRect().top <= top);
+      if (!pinned && innerHeight + scrollY >= document.documentElement.scrollHeight - 2) {
+        cur = heads.findLast((h) => h.getBoundingClientRect().top < innerHeight) || cur;
+      }
       if (cur === active) return;
       active = cur;
       items.forEach((a) => {
@@ -122,9 +161,35 @@
         while (li && !li.classList.contains("l2")) li = li.previousElementSibling;
         li?.firstElementChild.classList.add("parent");
       });
+      moveInk();
     };
-    const io = new IntersectionObserver(mark, { rootMargin: "-72px 0px -65% 0px" });
-    heads.forEach((h) => io.observe(h));
+    const later = () => {
+      if (!queued) {
+        queued = true;
+        requestAnimationFrame(mark);
+      }
+    };
+    items.forEach((a) =>
+      a.addEventListener("click", () => {
+        pinned = heads.find((h) => "#" + h.id === a.getAttribute("href"));
+        mark();
+      }),
+    );
+    // Only the reader's own input unpins; the link's smooth scroll fires none of these.
+    for (const t of ["wheel", "touchstart", "keydown"]) {
+      addEventListener(t, () => { if (pinned) { pinned = undefined; later(); } }, { passive: true });
+    }
+    addEventListener("scroll", later, { passive: true });
+    addEventListener("resize", () => {
+      later();
+      if (ink.classList.contains("on")) {
+        ink.classList.add("jump");
+        moveInk();
+        ink.getBoundingClientRect();
+        ink.classList.remove("jump");
+      }
+    });
+    mark();
   }
 
   // The clipboard API exists only in secure contexts; without it these controls do not appear.
@@ -166,9 +231,20 @@
     });
   }
 
+  // The post title shows in the top bar only after the page title has scrolled under it.
+  const bar = document.querySelector(".topbar");
+  const h1 = article.querySelector("h1");
+  if (bar && h1 && "IntersectionObserver" in window) {
+    new IntersectionObserver(([e]) => {
+      bar.classList.toggle("past-title", !e.isIntersecting && e.boundingClientRect.top < bar.offsetHeight);
+    }, { rootMargin: `-${bar.offsetHeight}px 0px 0px 0px` }).observe(h1);
+  }
+
   const share = article.querySelector(".share");
   if (share && (navigator.share || clip)) {
     share.hidden = false;
+    const shareStatus = votes.querySelector(".share-status");
+    let shareTimer;
     share.addEventListener("click", async () => {
       if (navigator.share) {
         try {
@@ -180,7 +256,14 @@
       }
       try {
         await clip.writeText(pageURL());
-        status.textContent = votes.dataset.linkCopied;
+        // The icon turns into a check mark; the text is only for screen readers.
+        shareStatus.textContent = votes.dataset.linkCopied;
+        share.classList.add("done");
+        clearTimeout(shareTimer);
+        shareTimer = setTimeout(() => {
+          share.classList.remove("done");
+          shareStatus.textContent = "";
+        }, 1500);
       } catch {
         // nothing to copy with: no message
       }

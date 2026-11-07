@@ -47,12 +47,13 @@ type site struct {
 
 // pageData is what every template gets. Fields a page does not use stay zero.
 type pageData struct {
-	Lang    string // UI language
-	DocLang string // <html lang>: the post language on post pages
-	Theme   string // "", "light" or "dark"
-	Path    string // current URI, for the prefs form
-	CSS     string
-	Site    site
+	Lang     string // UI language
+	DocLang  string // <html lang>: the post language on post pages
+	Theme    string // "", "light" or "dark"
+	Path     string // current URI, for the prefs form
+	CSS      string
+	ThemeCSS string // site or post colors from the bucket, empty for the built-in ones
+	Site     site
 
 	JS           []string // versioned script URLs for this page, deferred
 	TransitionJS string   // versioned, blocking: it must run before the first frame
@@ -110,6 +111,7 @@ type yearGroup struct {
 type popularPost struct {
 	*content.Post
 	Views int64
+	store.Votes
 }
 
 type pages struct {
@@ -204,6 +206,24 @@ func newPages(log *slog.Logger, cfg *config.Config, d Deps) *pages {
 	return p
 }
 
+// pluralForm picks key_one, key_few or key_many. A language with a key_few form counts
+// like Russian (1, 21 → one; 2–4, 22–24 → few; others many); the rest like English.
+func pluralForm(msgs map[string]string, key string, n int) string {
+	if _, slavic := msgs[key+"_few"]; !slavic {
+		if n == 1 {
+			return "one"
+		}
+		return "many"
+	}
+	switch d, dd := n%10, n%100; {
+	case d == 1 && dd != 11:
+		return "one"
+	case d >= 2 && d <= 4 && (dd < 12 || dd > 14):
+		return "few"
+	}
+	return "many"
+}
+
 // versioned adds a content hash, so the file can be cached forever.
 func versioned(path string, b []byte) string {
 	sum := sha256.Sum256(b)
@@ -229,6 +249,7 @@ func funcs(msgs map[string]string, wpm int) template.FuncMap {
 		"dateShort": func(d time.Time) string {
 			return t("date_short", "day", d.Day(), "month", t("month_"+strconv.Itoa(int(d.Month()))))
 		},
+		"plural":  func(key string, n int) string { return t(key+"_"+pluralForm(msgs, key, n), "n", n) },
 		"minutes": func(words int) int { return max(1, (words+wpm-1)/wpm) },
 		"asset":   assetPath,
 		"add":     func(a, b int) int { return a + b },
@@ -334,6 +355,7 @@ func (p *pages) data(r *http.Request) pageData {
 	d.DocLang = d.Lang
 	if ix := p.index(); ix != nil {
 		d.Site.Logo = ix.Logo
+		d.ThemeCSS = themeURL(ix.ThemeID(nil))
 		if b, err := json.Marshal(ix.TopTags(len(ix.Tags()))); err == nil { // json.Marshal escapes <, > and &
 			d.TagData = template.JS(b)
 		}
@@ -461,10 +483,14 @@ func yearGroups(page, list []*content.Post) []yearGroup {
 // popular is the posts by views in the last POPULAR_DAYS days (today included), most viewed first.
 func (p *pages) popular(ctx context.Context, ix *content.Index) []popularPost {
 	viewed, _ := p.store.Popular(ctx, store.Day(time.Now().AddDate(0, 0, 1-p.cfg.PopularDays))) // error logged by store
+	if len(viewed) == 0 {
+		return nil
+	}
+	votes, _ := p.store.VoteCounts(ctx) // error logged by store; counts show as 0
 	var out []popularPost
 	for _, v := range viewed {
 		if post := ix.Get(v.Slug); post != nil {
-			out = append(out, popularPost{post, v.Views})
+			out = append(out, popularPost{post, v.Views, votes[v.Slug]})
 		}
 	}
 	return out
@@ -558,6 +584,7 @@ func (p *pages) post(w http.ResponseWriter, r *http.Request) {
 	d := p.data(r)
 	d.Post = post
 	d.Older = ix.Older(post)
+	d.ThemeCSS = themeURL(ix.ThemeID(post))
 	d.DocLang = post.Lang
 	d.OGType = "article"
 	d.Desc = post.Description
@@ -701,6 +728,30 @@ func (p *pages) style(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable") // URL carries a content hash
 	_, _ = w.Write(p.css)
+}
+
+func themeURL(id string) string {
+	if id == "" {
+		return ""
+	}
+	return "/static/theme/" + id + ".css"
+}
+
+// theme serves a stylesheet built from home.md or post colors. The ID is its content hash.
+func (p *pages) theme(w http.ResponseWriter, r *http.Request) {
+	ix := p.index()
+	id, ok := strings.CutSuffix(r.PathValue("file"), ".css")
+	var css []byte
+	if ok && ix != nil {
+		css, ok = ix.ThemeCSS(id)
+	}
+	if !ok {
+		p.errorPage(w, r, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	_, _ = w.Write(css)
 }
 
 // favicon never answers 404: it redirects to the bucket logo when there is one, else serves the built-in mark.

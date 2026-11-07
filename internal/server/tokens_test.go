@@ -92,6 +92,7 @@ func TestTokenContrast(t *testing.T) {
 			{"--muted", "--raise", col("--raise")},
 			{"--uv", "--bg", col("--bg")},
 			{"--uv", "--raise", col("--raise")},
+			{"--ember", "--bg", col("--bg")},
 			{"--ember", "--raise", col("--raise")},
 			{"--text", "--uv-soft on --bg", soft.over(col("--bg"))},
 			{"--text", "--uv-soft on --raise", soft.over(col("--raise"))},

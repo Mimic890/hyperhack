@@ -109,6 +109,8 @@ func TestI18nKeysMatch(t *testing.T) {
 		}
 		keys[l] = slices.Sorted(maps.Keys(m))
 	}
+	// Only Russian has a "few" plural form.
+	keys["ru"] = slices.DeleteFunc(keys["ru"], func(k string) bool { return strings.HasSuffix(k, "_few") })
 	if !slices.Equal(keys["en"], keys["ru"]) {
 		t.Errorf("en and ru keys differ:\nen %v\nru %v", keys["en"], keys["ru"])
 	}
@@ -123,7 +125,7 @@ func TestHome(t *testing.T) {
 	}
 	mustContain(t, body, `<html lang="en">`, "Test &lt;Blog&gt;", `<h1 class="sr">Test &lt;Blog&gt;</h1>`,
 		`<article class="featured">`, `<h2><a href="/posts/post-d">Post D</a></h2>`, `<time datetime="2026-11-04">November 4, 2026</time>`,
-		`<h3><a href="/posts/post-c">Post C</a></h3>`, `<time datetime="2026-11-03">November 3</time>`, `<h2 class="year">2026 <span class="n">4</span></h2>`,
+		`<h3><a href="/posts/post-c">Post C</a></h3>`, `<time datetime="2026-11-03">November 3</time>`, `<h2 class="year">2026 <span class="n">4 posts</span></h2>`,
 		"3 min read", "Page 1 of 2", `href="/?page=2"`,
 		`<svg class="logo"`, `name="back" value="/"`, `popovertarget="lang-menu"`, `aria-current="true">English`)
 	for _, no := range []string{"Post A", "github", `id="search"`, `<h3><a href="/posts/post-d"`} {
@@ -133,7 +135,7 @@ func TestHome(t *testing.T) {
 	}
 
 	body = s.get("/?page=2").Body.String()
-	mustContain(t, body, "&lt;script&gt;", "&#34;&gt;&lt;img src=x", `rel="prev" href="/"`, "Page 2 of 2", `<h3><a href="/posts/post-a">`, `<h2 class="year">2026 <span class="n">4</span></h2>`)
+	mustContain(t, body, "&lt;script&gt;", "&#34;&gt;&lt;img src=x", `rel="prev" href="/"`, "Page 2 of 2", `<h3><a href="/posts/post-a">`, `<h2 class="year">2026 <span class="n">4 posts</span></h2>`)
 	if strings.Contains(body, "<script>alert") || strings.Contains(body, "<img src=x") {
 		t.Error("frontmatter not escaped")
 	}
@@ -215,8 +217,8 @@ func TestHomeBlocks(t *testing.T) {
 
 	t.Run("posts by year and limit", func(t *testing.T) {
 		s := homeSite(t, "  - {type: posts, group: year, limit: 1}\n", tagged())
-		inOrder(t, s.get("/").Body.String(), `<h2 class="year">2026 <span class="n">2</span></h2>`, `href="/posts/pb"`, "Page 1 of 3")
-		inOrder(t, s.get("/?page=3").Body.String(), `<h2 class="year">2025 <span class="n">1</span></h2>`, `href="/posts/pc"`)
+		inOrder(t, s.get("/").Body.String(), `<h2 class="year">2026 <span class="n">2 posts</span></h2>`, `href="/posts/pb"`, "Page 1 of 3")
+		inOrder(t, s.get("/?page=3").Body.String(), `<h2 class="year">2025 <span class="n">1 post</span></h2>`, `href="/posts/pc"`)
 		// Without featured the newest post stays in the list. Without grouping there is a full date.
 		s = homeSite(t, "  - {type: posts}\n", tagged())
 		body := s.get("/").Body.String()
@@ -245,8 +247,15 @@ func TestHomeBlocks(t *testing.T) {
 		}
 		day := store.Day(time.Now())
 		_ = s.d.Store.Add(context.Background(), day, store.Inc{Slug: "pa", Metric: store.View, N: 7}, store.Inc{Slug: "pb", Metric: store.View, N: 2}, store.Inc{Slug: "gone", Metric: store.View, N: 99})
+		for i, v := range []int{1, 1, -1} {
+			_, _ = s.d.Store.SetVote(context.Background(), []byte{byte(i)}, "pa", v)
+		}
 		body := s.get("/").Body.String()
-		inOrder(t, body, `<section class="popular"`, `<li><a href="/posts/pa">PA</a><p class="meta">Views: 7</p>`, `href="/rss.xml">Subscribe via RSS`)
+		inOrder(t, body, `<section class="popular"`, `<li><a href="/posts/pa">PA</a><p class="meta">`,
+			`<span class="sr">Views</span>7</span>`, `<span class="sr">Like</span>2</span>`, `<span class="sr">Dislike</span>1</span>`)
+		if strings.Contains(body[strings.Index(body, `<section class="popular"`):], `href="/rss.xml"`) {
+			t.Error("popular block repeats the RSS link of the top bar")
+		}
 		if strings.Contains(body, `href="/posts/pb"`) || strings.Contains(body, "gone") {
 			t.Error("popular limit ignored or a removed post shown")
 		}
@@ -303,7 +312,7 @@ func TestTopBarSearch(t *testing.T) {
 		}
 	}
 	home := s.get("/").Body.String()
-	order(home, `<a class="search-field" href="/search"`, "Search posts", "Ctrl K", `name="theme"`, `popovertarget="lang-menu"`, `href="/rss.xml"`, `href="https://github.com/example"`)
+	order(home, `<a class="search-field" href="/search"`, "Search posts", "Ctrl K", `name="theme"`, `href="/rss.xml"`, `href="https://github.com/example"`, `popovertarget="lang-menu"`)
 	if page2 := s.get("/?page=2").Body.String(); !strings.Contains(page2, `class="search-field"`) {
 		t.Error("page 2 of the main page has no search field")
 	}
@@ -435,5 +444,19 @@ func TestFavicon(t *testing.T) {
 	mustContain(t, s.get("/").Body.String(), `<link rel="icon" type="image/svg+xml" href="/assets/logo.svg">`)
 	if rec := s.get("/favicon.ico"); rec.Code != http.StatusFound || rec.Header().Get("Location") != "/assets/logo.svg" {
 		t.Errorf("favicon with logo = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestPluralForm(t *testing.T) {
+	ru := map[string]string{"posts_few": ""}
+	for n, want := range map[int]string{0: "many", 1: "one", 2: "few", 4: "few", 5: "many", 11: "many", 12: "many", 14: "many", 21: "one", 22: "few", 25: "many", 101: "one", 111: "many", 112: "many", 122: "few"} {
+		if got := pluralForm(ru, "posts", n); got != want {
+			t.Errorf("ru %d: %s, want %s", n, got, want)
+		}
+	}
+	for n, want := range map[int]string{0: "many", 1: "one", 2: "many", 21: "many"} {
+		if got := pluralForm(map[string]string{}, "posts", n); got != want {
+			t.Errorf("en %d: %s, want %s", n, got, want)
+		}
 	}
 }
