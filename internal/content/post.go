@@ -43,6 +43,7 @@ type Post struct {
 	HTML        template.HTML // sanitized
 	TOC         []TOCItem     // h2-h4 of HTML
 	Text        string        // plain text of HTML, for search
+	Diagrams    bool          // has ```mermaid blocks: the page loads the diagram scripts
 	Source      []byte        // the raw .md file, served at /posts/<slug>.md
 	Outbound    []string      // hosts of external links: the only allowed outbound-click labels
 }
@@ -153,6 +154,7 @@ func (r *Renderer) Parse(key string, src []byte) (*Post, error) {
 	p.TOC = tableOfContents(string(p.HTML))
 	p.Text = plainText(string(p.HTML))
 	p.Outbound = outboundHosts(string(p.HTML))
+	p.Diagrams = strings.Contains(string(p.HTML), `data-lang="mermaid"`)
 	p.Source = src
 	return p, nil
 }

@@ -187,7 +187,7 @@ func newPages(log *slog.Logger, cfg *config.Config, d Deps) *pages {
 	p.css = append(css, themedChromaCSS()...)
 	p.cssV = versioned("/static/style.css", p.css)
 	p.scripts = map[string]script{}
-	for _, name := range []string{"search.js", "altcha.js", "post.js", "transition.js"} {
+	for _, name := range []string{"search.js", "altcha.js", "post.js", "transition.js", "pele.js", "diagram.js"} {
 		b, err := webFS.ReadFile("web/static/" + name)
 		if err != nil {
 			panic(err)
@@ -567,6 +567,9 @@ func (p *pages) post(w http.ResponseWriter, r *http.Request) {
 	}
 	d.JSONLD = p.jsonLD(post, d.Canonical, d.Image)
 	d.JS = append(d.JS, p.scripts["altcha.js"].url, p.scripts["post.js"].url)
+	if post.Diagrams {
+		d.JS = append(d.JS, p.scripts["pele.js"].url, p.scripts["diagram.js"].url)
+	}
 	ctx := r.Context()
 	d.Views, _ = p.store.Views(ctx, post.Slug) // errors are logged by store; the page still renders
 	d.Votes, _ = p.store.PostVotes(ctx, post.Slug)
