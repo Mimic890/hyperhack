@@ -96,7 +96,7 @@ img { max-width: 100%; height: auto; }
   display: none; min-width: 0; overflow: hidden; color: var(--muted); font-size: 0.8125rem; line-height: 1.3; text-align: center;
   -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
 }
-.logo { display: block; flex: none; width: 40px; height: 29px; object-fit: contain; object-position: left center; }
+.logo { display: block; flex: none; width: 47px; height: 34px; object-fit: contain; object-position: left center; }
 svg.logo { color: var(--text); }
 svg.logo path { stroke: var(--bg); }
 .tools, .prefs { display: flex; align-items: center; gap: 0.25rem; }
