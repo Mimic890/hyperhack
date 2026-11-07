@@ -187,7 +187,7 @@ Rules:
 - Math uses the Obsidian syntax: `$…$` inside a line, `$$…$$` as a block. The server turns it into MathML, so formulas need no script and also show in RSS. `$5 and $10` stays text; write `\$` for a literal dollar. A formula the converter cannot read is shown as its TeX.
 - Diagrams use a ` ```mermaid ` code block, as in Obsidian. The browser draws them with Pele; without JavaScript, in RSS, or when the diagram has an error, the code block is shown.
 - A code block shows the language from its fence, so write ` ```go `.
-- `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon. In the top bar it fits a 40×29 px box.
+- `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon. In the top bar it fits a 47×34 px box.
 
 ## Main page
 
