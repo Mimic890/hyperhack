@@ -98,6 +98,14 @@ img { max-width: 100%; height: auto; }
 }
 .logo { display: block; flex: none; width: 47px; height: 34px; object-fit: contain; object-position: left center; }
 svg.logo { color: var(--text); }
+/* With two logos only the one for the current theme shows. */
+.logo-dark { display: none; }
+:root[data-theme="dark"] .logo-dark { display: block; }
+:root[data-theme="dark"] .logo-light { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo-dark { display: block; }
+  :root:not([data-theme="light"]) .logo-light { display: none; }
+}
 svg.logo path { stroke: var(--bg); }
 .tools, .prefs { display: flex; align-items: center; gap: 0.25rem; }
 .tools { flex: none; }

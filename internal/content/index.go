@@ -17,7 +17,7 @@ type Index struct {
 	tags   []string           // sorted
 	counts []TagCount         // most posts first, ties by name
 	search bleve.Index
-	Logo   bool    // assets/logo.svg is in the mirror
+	Logo   Logo    // asset keys with fallbacks applied; empty: the built-in mark
 	Home   []Block // main page blocks
 
 	themes    map[string][]byte // theme stylesheet ID → CSS

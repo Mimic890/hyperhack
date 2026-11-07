@@ -42,7 +42,7 @@ const cookieMaxAge = 365 * 24 * 60 * 60
 type site struct {
 	Name   string
 	GitHub string
-	Logo   bool
+	Logo   content.Logo
 }
 
 // pageData is what every template gets. Fields a page does not use stay zero.
@@ -754,11 +754,11 @@ func (p *pages) theme(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(css)
 }
 
-// favicon never answers 404: it redirects to the bucket logo when there is one, else serves the built-in mark.
+// favicon never answers 404: it redirects to the bucket favicon when there is one, else serves the built-in mark.
 func (p *pages) favicon(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=3600") // the logo can appear or go with any sync
-	if ix := p.index(); ix != nil && ix.Logo {
-		http.Redirect(w, r, "/assets/logo.svg", http.StatusFound)
+	if ix := p.index(); ix != nil && ix.Logo.Favicon != "" {
+		http.Redirect(w, r, assetPath(ix.Logo.Favicon), http.StatusFound)
 		return
 	}
 	w.Header().Set("Content-Type", "image/svg+xml")

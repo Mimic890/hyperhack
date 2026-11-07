@@ -33,7 +33,7 @@
 {{- with .JSONLD}}
 <script type="application/ld+json">{{.}}</script>
 {{- end}}
-<link rel="icon" type="image/svg+xml" href="{{if .Site.Logo}}/assets/logo.svg{{else}}/favicon.ico{{end}}">
+<link rel="icon" href="{{with .Site.Logo.Favicon}}{{asset .}}{{else}}/favicon.ico{{end}}">
 <link rel="stylesheet" href="{{.CSS}}">
 {{- with .ThemeCSS}}
 <link rel="stylesheet" href="{{.}}">
@@ -48,9 +48,10 @@
 <a class="skip" href="#main" lang="{{.Lang}}">{{t "skip"}}</a>
 <header class="topbar" lang="{{.Lang}}">
   <a class="brand" href="/" aria-label="{{.Site.Name}} — {{t "home"}}">
-    {{- if .Site.Logo}}<img class="logo" src="/assets/logo.svg" alt="" width="47" height="34">
-    {{- else}}<svg class="logo" viewBox="0 0 40 29" width="47" height="34" aria-hidden="true"><rect width="40" height="29" rx="8" fill="currentColor"/><path d="M14 8v13M26 8v13M14 14.5h12" stroke-width="3" stroke-linecap="round"/></svg>
-    {{- end}}<span>{{.Site.Name}}</span>
+    {{- with .Site.Logo}}{{if not .Light}}<svg class="logo" viewBox="0 0 40 29" width="47" height="34" aria-hidden="true"><rect width="40" height="29" rx="8" fill="currentColor"/><path d="M14 8v13M26 8v13M14 14.5h12" stroke-width="3" stroke-linecap="round"/></svg>
+    {{- else if eq .Light .Dark}}<img class="logo" src="{{asset .Light}}" alt="" width="47" height="34">
+    {{- else}}<img class="logo logo-light" src="{{asset .Light}}" alt="" width="47" height="34"><img class="logo logo-dark" src="{{asset .Dark}}" alt="" width="47" height="34">
+    {{- end}}{{end}}<span>{{.Site.Name}}</span>
   </a>
   {{- with .Post}}
   <span class="bar-title" aria-hidden="true">{{.Title}}</span>

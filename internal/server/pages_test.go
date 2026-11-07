@@ -278,7 +278,7 @@ func TestPost(t *testing.T) {
 	cfg := testConfig()
 	cfg.GitHubURL = "https://github.com/example"
 	ix := testIndex(1)
-	ix.Logo = true
+	ix.Logo = content.Logo{}.Or("assets/logo.svg")
 	s := newSite(t, cfg, ix)
 	rec := s.get("/posts/xss")
 	if rec.Code != 200 {
@@ -430,7 +430,7 @@ func TestStatic(t *testing.T) {
 func TestFavicon(t *testing.T) {
 	ix := testIndex(1)
 	s := newSite(t, testConfig(), ix)
-	mustContain(t, s.get("/").Body.String(), `<link rel="icon" type="image/svg+xml" href="/favicon.ico">`)
+	mustContain(t, s.get("/").Body.String(), `<link rel="icon" href="/favicon.ico">`)
 	for _, idx := range []*content.Index{ix, nil} { // nil: still starting, no index yet
 		s.idx.Store(idx)
 		rec := s.get("/favicon.ico")
@@ -439,11 +439,22 @@ func TestFavicon(t *testing.T) {
 		}
 	}
 
-	ix.Logo = true
+	ix.Logo = content.Logo{}.Or("assets/logo.svg")
 	s.idx.Store(ix)
-	mustContain(t, s.get("/").Body.String(), `<link rel="icon" type="image/svg+xml" href="/assets/logo.svg">`)
+	mustContain(t, s.get("/").Body.String(), `<link rel="icon" href="/assets/logo.svg">`)
 	if rec := s.get("/favicon.ico"); rec.Code != http.StatusFound || rec.Header().Get("Location") != "/assets/logo.svg" {
 		t.Errorf("favicon with logo = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	ix.Logo = content.Logo{Light: "assets/brand/day.svg", Dark: "assets/brand/night logo.png", Favicon: "assets/brand/icon.png"}
+	body := s.get("/").Body.String()
+	mustContain(t, body, `<link rel="icon" href="/assets/brand/icon.png">`,
+		`<img class="logo logo-light" src="/assets/brand/day.svg"`, `<img class="logo logo-dark" src="/assets/brand/night%20logo.png"`)
+	if strings.Contains(body, `<svg class="logo"`) {
+		t.Error("built-in mark next to bucket logos")
+	}
+	if rec := s.get("/favicon.ico"); rec.Header().Get("Location") != "/assets/brand/icon.png" {
+		t.Errorf("favicon = %q", rec.Header().Get("Location"))
 	}
 }
 

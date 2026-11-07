@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,7 +17,7 @@ import (
 
 const fetchTimeout = 5 * time.Minute
 
-// LogoKey is the optional site logo; Caddy serves it as /assets/logo.svg.
+// LogoKey is the logo used when home.md sets none; Caddy serves it as /assets/logo.svg.
 const LogoKey = "assets/logo.svg"
 
 // HomeKey lists the main page blocks.
@@ -48,6 +49,7 @@ type Syncer struct {
 	cache     map[string]cached // post key → last parse result
 	home      []content.Block   // blocks from homeETag
 	theme     content.Theme     // site colors from homeETag
+	logo      content.Logo      // site logos from homeETag
 	homeETag  string            // "" when there is no home.md
 	homeRead  bool
 	warned    map[string]string // key → ETag already warned about, so polls do not repeat WARNs
@@ -296,20 +298,24 @@ func (s *Syncer) rebuild() {
 	}
 	s.cache = next
 	ix := content.NewIndex(posts, s.rlog)
-	_, ix.Logo = s.mirror.State()[LogoKey]
 	ix.Home = s.loadHome()
+	legacy := ""
+	if _, ok := s.mirror.State()[LogoKey]; ok {
+		legacy = LogoKey
+	}
+	ix.Logo = s.logo.Or(legacy)
 	ix.SetTheme(s.theme)
 	s.index.Store(ix)
 }
 
-// loadHome returns the main page blocks and sets the site theme. It reads and warns only when
+// loadHome returns the main page blocks and sets the site theme and logos. It reads and warns only when
 // home.md changed. Caller holds mu.
 func (s *Syncer) loadHome() []content.Block {
 	etag := s.mirror.State()[HomeKey]
 	if s.homeRead && etag == s.homeETag {
 		return s.home
 	}
-	s.homeRead, s.homeETag, s.theme = true, etag, content.Theme{}
+	s.homeRead, s.homeETag, s.theme, s.logo = true, etag, content.Theme{}, content.Logo{}
 	if etag == "" {
 		s.rlog.Warn("no home.md, using the default blocks")
 		s.home = content.DefaultHome()
@@ -321,10 +327,11 @@ func (s *Syncer) loadHome() []content.Block {
 		s.home = content.DefaultHome()
 		return s.home
 	}
-	var problems, themeProblems []string
+	var problems, themeProblems, logoProblems []string
 	s.home, problems = content.ParseHome(src)
 	s.theme, themeProblems = content.ParseSiteTheme(src)
-	for _, p := range append(problems, themeProblems...) {
+	s.logo, logoProblems = content.ParseSiteLogo(src)
+	for _, p := range slices.Concat(problems, themeProblems, logoProblems) {
 		s.rlog.Warn("home.md: "+p, "key", HomeKey)
 	}
 	return s.home

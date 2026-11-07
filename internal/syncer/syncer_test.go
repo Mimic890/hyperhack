@@ -124,7 +124,7 @@ func TestSync(t *testing.T) {
 	if got := slugs(s); !slices.Equal(got, []string{"one", "two"}) {
 		t.Fatalf("slugs = %v", got)
 	}
-	if s.Index().Logo {
+	if s.Index().Logo != (content.Logo{}) {
 		t.Error("Logo without assets/logo.svg")
 	}
 	for _, f := range []string{"one.md", "deep/folder/two.md", "broken.md", "assets/img/a.png", mirror.StateFile} {
@@ -158,7 +158,7 @@ func TestSync(t *testing.T) {
 	if s.Index().Get("one").Title != "One v2" {
 		t.Error("one.md not updated")
 	}
-	if !s.Index().Logo {
+	if s.Index().Logo != (content.Logo{Light: LogoKey, Dark: LogoKey, Favicon: LogoKey}) {
 		t.Error("Logo not set after assets/logo.svg appeared")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "deep/folder/two.md")); err == nil {
