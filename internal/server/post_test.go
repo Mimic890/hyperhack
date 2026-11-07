@@ -160,3 +160,50 @@ func TestDiagramScripts(t *testing.T) {
 		t.Errorf("pele.js: %d", w.Code)
 	}
 }
+
+func TestThemeStylesheet(t *testing.T) {
+	r := content.NewRenderer("en")
+	var posts []*content.Post
+	for key, fm := range map[string]string{
+		"plain.md": "",
+		"own.md":   "theme:\n  light:\n    accent: \"#c03\"\n",
+	} {
+		p, err := r.Parse(key, []byte("---\ntitle: T\ndate: 2026-11-01\n"+fm+"---\nbody\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		posts = append(posts, p)
+	}
+	ix := content.NewIndex(posts, slog.New(slog.DiscardHandler))
+	ix.SetTheme(content.Theme{Light: map[string]string{"bg": "#eee"}})
+	s := newSite(t, testConfig(), ix)
+
+	link := regexp.MustCompile(`<link rel="stylesheet" href="(/static/theme/[0-9a-f]{16}\.css)">`)
+	sheet := func(path string) string {
+		m := link.FindStringSubmatch(s.get(path).Body.String())
+		if m == nil {
+			t.Fatalf("%s: no theme stylesheet", path)
+		}
+		w := s.get(m[1])
+		if w.Code != 200 || w.Header().Get("Content-Type") != "text/css; charset=utf-8" || !strings.Contains(w.Header().Get("Cache-Control"), "immutable") {
+			t.Fatalf("%s: %d %v", m[1], w.Code, w.Header())
+		}
+		return w.Body.String()
+	}
+	for _, path := range []string{"/", "/posts/plain", "/nope"} {
+		if css := sheet(path); css != ":root { --bg: #eee; }\n" {
+			t.Errorf("%s: %q", path, css)
+		}
+	}
+	if css := sheet("/posts/own"); css != ":root { --bg: #eee; --uv: #c03; }\n" {
+		t.Errorf("own: %q", css)
+	}
+	for _, path := range []string{"/static/theme/0123456789abcdef.css", "/static/theme/x", "/static/theme/.css"} {
+		if w := s.get(path); w.Code != 404 {
+			t.Errorf("%s = %d, want 404", path, w.Code)
+		}
+	}
+	if strings.Contains(newSite(t, testConfig(), testIndex(1)).get("/").Body.String(), "/static/theme/") {
+		t.Error("theme stylesheet without a theme")
+	}
+}

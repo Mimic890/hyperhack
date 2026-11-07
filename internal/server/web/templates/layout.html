@@ -35,6 +35,9 @@
 {{- end}}
 <link rel="icon" type="image/svg+xml" href="{{if .Site.Logo}}/assets/logo.svg{{else}}/favicon.ico{{end}}">
 <link rel="stylesheet" href="{{.CSS}}">
+{{- with .ThemeCSS}}
+<link rel="stylesheet" href="{{.}}">
+{{- end}}
 <link rel="expect" href="#main" blocking="render">
 <script src="{{.TransitionJS}}"></script>
 {{- range .JS}}

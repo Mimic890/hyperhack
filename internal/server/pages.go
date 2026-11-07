@@ -47,12 +47,13 @@ type site struct {
 
 // pageData is what every template gets. Fields a page does not use stay zero.
 type pageData struct {
-	Lang    string // UI language
-	DocLang string // <html lang>: the post language on post pages
-	Theme   string // "", "light" or "dark"
-	Path    string // current URI, for the prefs form
-	CSS     string
-	Site    site
+	Lang     string // UI language
+	DocLang  string // <html lang>: the post language on post pages
+	Theme    string // "", "light" or "dark"
+	Path     string // current URI, for the prefs form
+	CSS      string
+	ThemeCSS string // site or post colors from the bucket, empty for the built-in ones
+	Site     site
 
 	JS           []string // versioned script URLs for this page, deferred
 	TransitionJS string   // versioned, blocking: it must run before the first frame
@@ -353,6 +354,7 @@ func (p *pages) data(r *http.Request) pageData {
 	d.DocLang = d.Lang
 	if ix := p.index(); ix != nil {
 		d.Site.Logo = ix.Logo
+		d.ThemeCSS = themeURL(ix.ThemeID(nil))
 		if b, err := json.Marshal(ix.TopTags(len(ix.Tags()))); err == nil { // json.Marshal escapes <, > and &
 			d.TagData = template.JS(b)
 		}
@@ -577,6 +579,7 @@ func (p *pages) post(w http.ResponseWriter, r *http.Request) {
 	d := p.data(r)
 	d.Post = post
 	d.Older = ix.Older(post)
+	d.ThemeCSS = themeURL(ix.ThemeID(post))
 	d.DocLang = post.Lang
 	d.OGType = "article"
 	d.Desc = post.Description
@@ -720,6 +723,30 @@ func (p *pages) style(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable") // URL carries a content hash
 	_, _ = w.Write(p.css)
+}
+
+func themeURL(id string) string {
+	if id == "" {
+		return ""
+	}
+	return "/static/theme/" + id + ".css"
+}
+
+// theme serves a stylesheet built from home.md or post colors. The ID is its content hash.
+func (p *pages) theme(w http.ResponseWriter, r *http.Request) {
+	ix := p.index()
+	id, ok := strings.CutSuffix(r.PathValue("file"), ".css")
+	var css []byte
+	if ok && ix != nil {
+		css, ok = ix.ThemeCSS(id)
+	}
+	if !ok {
+		p.errorPage(w, r, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	_, _ = w.Write(css)
 }
 
 // favicon never answers 404: it redirects to the bucket logo when there is one, else serves the built-in mark.
