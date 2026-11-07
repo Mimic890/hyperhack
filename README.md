@@ -183,6 +183,8 @@ Rules:
 - Allowed asset types: `png jpg jpeg webp avif gif svg mp4 webm`.
 - Headings `##`, `###` and `####` make the table of contents. A post without them has none.
 - Callouts use the Obsidian syntax: `> [!note]`, `> [!tip]` or `> [!warning]`, in any case, with an optional title after the type. Without a title the block gets the type's name, in Russian for `lang: ru` and in English otherwise. Any other type stays a plain quote.
+- Math uses the Obsidian syntax: `$…$` inside a line, `$$…$$` as a block. The server turns it into MathML, so formulas need no script and also show in RSS. `$5 and $10` stays text; write `\$` for a literal dollar. A formula the converter cannot read is shown as its TeX.
+- Diagrams use a ` ```mermaid ` code block, as in Obsidian. The browser draws them with Pele; without JavaScript, in RSS, or when the diagram has an error, the code block is shown.
 - A code block shows the language from its fence, so write ` ```go `.
 - `assets/logo.svg`, if present, replaces the built-in logo in the top bar and the favicon. In the top bar it fits a 40×29 px box.
 

@@ -167,6 +167,15 @@ var xssCorpus = []string{
 	`<!--><script>alert(1)</script>-->`,
 	`<a href="https://example.com" target="_blank" onclick="alert(1)">x</a>`,
 	`<details open ontoggle=alert(1)>`,
+	`$\text{<script>alert(1)</script>}$`,
+	`$\text{</math><img src=x onerror=alert(1)>}$`,
+	`$\mathrm{<svg onload=alert(1)>}$`,
+	`$\href{javascript:alert(1)}{x}$`,
+	`$\color{red" onmouseover="alert(1)}{x}$`,
+	`$\class{x" onclick="alert(1)}{y}$`,
+	"$$\n\\operatorname{<style>*{}</style>}\n$$",
+	"$$\n\\text{</annotation><script>alert(1)</script>}\n$$",
+	`$\newcommand{\x}{<img src=x onerror=alert(1)>}\x$`,
 }
 
 func TestRenderXSS(t *testing.T) {
@@ -303,7 +312,8 @@ func unsafeHTML(s string) string {
 		case html.StartTagToken, html.SelfClosingTagToken:
 			tok := z.Token()
 			switch tok.Data {
-			case "script", "style", "iframe", "object", "embed", "form", "input", "svg", "math", "base", "meta", "link":
+			case "script", "style", "iframe", "object", "embed", "form", "input", "svg", "base", "meta", "link",
+				"annotation-xml", "mglyph", "maction", "malignmark":
 				return "tag " + tok.Data
 			}
 			for _, a := range tok.Attr {

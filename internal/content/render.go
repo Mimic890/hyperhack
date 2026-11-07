@@ -35,6 +35,7 @@ func NewRenderer(defaultLang string) *Renderer {
 		// No goldmark.WithUnsafe: raw HTML and dangerous URLs are dropped.
 		goldmark.WithExtensions(
 			extension.GFM,
+			mathExtension{},
 			highlighting.NewHighlighting(
 				highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
 				highlighting.WithWrapperRenderer(codeBlockWrapper),
@@ -56,6 +57,7 @@ func NewRenderer(defaultLang string) *Renderer {
 	p.AllowAttrs("width", "height").Matching(regexp.MustCompile(`^[0-9]{1,6}$`)).OnElements("img")
 	p.AllowAttrs("loading").Matching(regexp.MustCompile(`^lazy$`)).OnElements("img")
 	p.AllowAttrs("decoding").Matching(regexp.MustCompile(`^async$`)).OnElements("img")
+	allowMathML(p)
 	r.policy = p
 	return r
 }
@@ -222,6 +224,33 @@ func codeBlockWrapper(w util.BufWriter, c highlighting.CodeBlockContext, enterin
 	if !c.Highlighted() {
 		_, _ = w.WriteString("<pre><code>")
 	}
+}
+
+// MathML from the TeX converter. Only presentation elements and plain attributes:
+// no href, style, event handlers or annotation-xml, which can carry HTML.
+var mathElements = []string{"math", "semantics", "mrow", "mi", "mn", "mo", "mtext", "mspace",
+	"mpadded", "merror", "mover", "munder", "munderover", "mfrac", "msup", "msub", "msubsup",
+	"msqrt", "mroot", "mstyle", "mtable", "mtr", "mtd", "mlabeledtr", "menclose",
+	"mmultiscripts", "mprescripts", "none"}
+
+func allowMathML(p *bluemonday.Policy) {
+	p.AllowNoAttrs().OnElements(mathElements...)
+	p.AllowNoAttrs().OnElements("annotation") // the TeX source; browsers do not show it
+	p.AllowAttrs("encoding").Matching(regexp.MustCompile(`^application/x-tex$`)).OnElements("annotation")
+	p.AllowAttrs("xmlns").Matching(regexp.MustCompile(`^http://www\.w3\.org/1998/Math/MathML$`)).OnElements("math")
+	p.AllowAttrs("display").Matching(regexp.MustCompile(`^(block|inline)$`)).OnElements("math")
+	p.AllowAttrs("class").Matching(regexp.MustCompile(`^math-(display|text)style$`)).OnElements("math")
+	p.AllowAttrs("displaystyle", "accent", "fence", "largeop", "movablelimits", "stretchy", "symmetric").
+		Matching(regexp.MustCompile(`^(true|false)$`)).OnElements(mathElements...)
+	p.AllowAttrs("width", "height", "lspace", "rspace", "voffset", "minsize", "linethickness", "mathsize").
+		Matching(regexp.MustCompile(`^-?[0-9.]{1,10}(em|ex|px|pt|%)?$`)).OnElements(mathElements...)
+	p.AllowAttrs("scriptlevel").Matching(regexp.MustCompile(`^[+-]?[0-9]{1,2}$`)).OnElements(mathElements...)
+	p.AllowAttrs("mathvariant").Matching(regexp.MustCompile(`^[a-z-]{1,30}$`)).OnElements(mathElements...)
+	p.AllowAttrs("form").Matching(regexp.MustCompile(`^(prefix|infix|postfix)$`)).OnElements("mo")
+	p.AllowAttrs("columnalign", "rowalign", "columnlines", "rowspacing", "columnspacing", "notation").
+		Matching(regexp.MustCompile(`^[a-z0-9. ]{1,100}$`)).OnElements(mathElements...)
+	p.AllowAttrs("rowspan", "columnspan").Matching(regexp.MustCompile(`^[0-9]{1,3}$`)).OnElements("mtd")
+	p.AllowAttrs("mathcolor").Matching(regexp.MustCompile(`^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$`)).OnElements(mathElements...)
 }
 
 func assetPath(dest []byte) []byte {

@@ -130,3 +130,33 @@ func TestMotionMarkup(t *testing.T) {
 		}
 	}
 }
+
+func TestDiagramScripts(t *testing.T) {
+	r := content.NewRenderer("en")
+	var posts []*content.Post
+	for key, src := range map[string]string{
+		"chart.md": "---\ntitle: Chart\ndate: 2026-11-03\n---\n```mermaid\nflowchart LR\n  A --> B\n```\n",
+		"math.md":  "---\ntitle: Math\ndate: 2026-11-02\n---\nArea $\\pi r^2$.\n\n```go\nx := 1\n```\n",
+	} {
+		p, err := r.Parse(key, []byte(src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		posts = append(posts, p)
+	}
+	s := newSite(t, testConfig(), content.NewIndex(posts, slog.New(slog.DiscardHandler)))
+	for path, want := range map[string]bool{"/posts/chart": true, "/posts/math": false} {
+		body := s.get(path).Body.String()
+		for _, js := range []string{"/static/pele.js?v=", "/static/diagram.js?v="} {
+			if strings.Contains(body, js) != want {
+				t.Errorf("%s: %s loaded = %v, want %v", path, js, !want, want)
+			}
+		}
+	}
+	if !strings.Contains(s.get("/posts/math").Body.String(), "<math ") {
+		t.Error("math post has no MathML")
+	}
+	if w := s.get("/static/pele.js"); w.Code != 200 || !strings.HasPrefix(w.Body.String(), "/*! Pele 1.13.0") {
+		t.Errorf("pele.js: %d", w.Code)
+	}
+}

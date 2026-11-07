@@ -345,6 +345,18 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 .code-head { display: flex; align-items: center; justify-content: space-between; height: 44px; padding-left: 1.125rem; color: var(--muted); font-size: 0.8125rem; }
 .code-head::before { content: attr(data-lang); }
 .prose .code-block pre { margin: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+
+/* Diagrams: Pele SVG (diagram.js) in the code block frame; the colors follow the theme tokens. */
+.diagram {
+  margin: 0 0 1.25rem; padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--raise); overflow-x: auto;
+  --pele-bg: var(--raise); --pele-fg: var(--text); --pele-muted: var(--muted); --pele-line: var(--muted);
+  --pele-surface: var(--bg); --pele-surface-alt: var(--uv-soft); --pele-border: var(--line); --pele-accent: var(--uv);
+  --pele-font: "Onest", system-ui, sans-serif; --pele-radius: 8px;
+}
+.diagram svg { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+
+/* Math: MathML from the server. Wide display formulas scroll instead of widening the page. */
+.prose math[display="block"] { margin: 0 0 1.25rem; overflow-x: auto; overflow-y: hidden; }
 .copy {
   display: inline-flex; align-items: center; gap: 0.35rem; height: 44px; padding: 0 1rem;
   border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer;

@@ -41,7 +41,7 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 |---|---|
 | Users | One author. No registration. Public side is read-only. |
 | Backend | Go 1.27, latest stable (go1.27.3 on 2026-11-03). `go.mod`: `go 1.27` + `toolchain go1.27.3`. Builder image: `golang:1.27`. Check go.dev/dl before starting; Dependabot keeps it current. |
-| Frontend | Server-side rendering with `html/template`. No framework. Minimal vanilla JS: votes, ALTCHA, view and time beacon, search palette, table of contents, copy and share buttons, post transitions. |
+| Frontend | Server-side rendering with `html/template`. No framework. Minimal vanilla JS: votes, ALTCHA, view and time beacon, search palette, table of contents, copy and share buttons, post transitions, Mermaid diagrams (Pele). |
 | Themes | Light and dark, toggle in the top bar. System theme by default until the visitor picks one. The choice is stored in a cookie and rendered on the server (no inline JS). The toggle is a form that posts to `/prefs`, so it works without JS. |
 | Design | See Design. Fonts: Onest (text) and JetBrains Mono (code and heading markers), OFL, self-hosted, Latin + Cyrillic subsets. |
 | Languages | Code, docs, UI: English. UI also in Russian. Default: `DEFAULT_LANG` (`en` / `ru`) in `.env`. Visitor dropdown in the top bar; the choice is stored in a cookie (the server must know it to render the page). Post text is not translated. |
@@ -390,6 +390,21 @@ The service stores per-post metrics only. Storage: SQLite.
 - Block on `--uv-soft`, radius 14px, icon and type title, no colored left stripe. Icons come from CSS.
 - Default titles follow the post `lang`, since post HTML is rendered once: Russian for `ru`, English otherwise.
 
+### Math
+
+- Obsidian syntax: `$…$` inline, `$$…$$` display (on its own lines or on one line). As in Obsidian, the opening `$` is not followed by a space and the closing `$` is not preceded by a space or followed by a digit, so `$5 and $10` stays text. `\$` is a literal dollar. Code spans and code blocks are not parsed.
+- Server-side: TeX → MathML with `github.com/wyatt915/treeblood` `v0.1.16` (pure Go, MIT). Browsers show MathML natively: no JS, no CSP change, formulas also work in RSS.
+- A formula over 4096 bytes, or one the converter rejects, is shown as its TeX in `<code class="math-error">`.
+- MathML passes `bluemonday` with an allowlist: presentation elements and plain attributes with strict values; no `style`, `href`, `annotation-xml`, `mglyph` or `maction`. The TeX source stays in `<annotation>`; search text takes the TeX, not the MathML.
+- A wide display formula scrolls sideways inside its own box.
+
+### Diagrams
+
+- Obsidian syntax: a ` ```mermaid ` code block. Drawn in the browser by Pele (Mermaid → SVG, MIT), vendored as `static/pele.js` (1.13.0, `dist/pele.global.js` checked against the npm integrity hash, license in `static/pele-LICENSE.txt`).
+- `pele.js` and `diagram.js` load only on posts with a ` ```mermaid ` block. Without JS, in RSS, and when a diagram has an error, the code block stays.
+- Pele writes `style="…"` attributes, which the CSP blocks. `diagram.js` renames them before parsing and sets the same styles through CSSOM, which the CSP allows. Pele zoom is off: its buttons set style attributes.
+- Frame like a code block; colors from the theme tokens through the `--pele-*` variables. The layout adapts to the column width.
+
 ### Search
 
 Goal: the best search possible without an extra service.
@@ -557,7 +572,7 @@ Other methods → `405`. Unknown paths → `404`.
 
 - All HTML through `html/template` (context-aware escaping). Templates parsed at startup.
 - Markdown: goldmark with GFM (tables, strikethrough, autolinks), without `WithUnsafe`. By default goldmark does not render raw HTML or dangerous URLs.
-- Defense in depth: post HTML passes `bluemonday` (UGC policy + chroma classes + heading ids + callout and code block classes + code language attribute).
+- Defense in depth: post HTML passes `bluemonday` (UGC policy + chroma classes + heading ids + callout and code block classes + code language attribute + MathML allowlist).
 - External links get `rel="noopener noreferrer"`.
 - Images only from `assets/`. External images are blocked by CSP (also keeps reader IPs private).
 - JSON-LD from `json.Marshal` (escapes `<`, `>`, `&`).
@@ -681,7 +696,7 @@ Other methods → `405`. Unknown paths → `404`.
 
 - XSS payload corpus through the Markdown → HTML pipeline.
 - Path traversal keys for the mirror.
-- Go fuzz tests: frontmatter parser, Markdown render, beacon decoder.
+- Go fuzz tests: frontmatter parser, Markdown render, TeX math, beacon decoder.
 - Rate limiter, ALTCHA replay, Origin check, private endpoint CIDR checks.
 
 ## Proposed (not confirmed)
@@ -742,3 +757,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-06 — Post page details: over a banner the metadata is `--text` and the title has a `--bg` halo, because measured on a white cover in the dark theme `--muted` metadata and the bare title fall below the contrast minimum. The code language is an attribute shown by CSS, so it stays out of search text and RSS. Indented code gets the same header as fenced code.
 - 2026-11-06 — Search palette details: `search.js` loads on every page and also serves the live results on `/search`, so the palette needs no new endpoint. `#tag` tokens stay out of the stored search queries: only words are stored, so typed tags cannot fill the table. Past either end of the list nothing is selected, and `Enter` opens the results page, the only way from the palette to results beyond the first page.
 - 2026-11-07 — Motion details: `transition.js` is the only blocking script, because a deferred one misses `pagereveal`. The cover name goes on the whole banner, so the fade stays during the transition, and the post header gets its own name, so the cover does not paint over tags and metadata. Names go on block boxes only, since a wrapped inline link would skip the transition. `scale(.94)` and the number animation apply to like and dislike.
+- 2026-11-07 — Math and diagrams in Obsidian syntax. Math: `$…$` / `$$…$$` turned into MathML on the server with `treeblood` `v0.1.16` and an own goldmark parser (the `goldmark-treeblood` wrapper treats any `$` as math); MathML allowlist in `bluemonday`. Diagrams: ` ```mermaid ` drawn in the browser by Pele 1.13.0, vendored and loaded only on posts that have one; Pele style attributes move to CSSOM, so the CSP stays as it is; zoom off. Fallback in both: the source stays visible.
