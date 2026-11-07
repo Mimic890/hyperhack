@@ -241,14 +241,14 @@ theme:
 
 | Name | What it colors | Light | Dark |
 |---|---|---|---|
-| `background` | page background | `#F6F5FB` | `#101119` |
-| `surface` | cards, code, menus | `#FFFFFF` | `#171925` |
-| `border` | borders, dividers | `#E2E0EE` | `#262938` |
-| `text` | main text | `#1B1930` | `#E7E5F2` |
-| `muted` | dates, captions, descriptions | `#5D5A75` | `#9C99B3` |
-| `accent` | links, `#`, active items | `#5B3DE6` | `#8B6CFF` |
-| `accent-2` | "New post", end of the progress bar | `#B9541F` | `#FF8F57` |
-| `accent-soft` | background of active items and callouts | `#5B3DE61A` | `#8B6CFF24` |
+| `background` | page background | `#FFFFFF` | `#0A0A0A` |
+| `surface` | cards, code, menus | `#F5F5F5` | `#171717` |
+| `border` | borders, dividers | `#E5E5E5` | `#262626` |
+| `text` | main text | `#171717` | `#EDEDED` |
+| `muted` | dates, captions, descriptions | `#5C5C5C` | `#A3A3A3` |
+| `accent` | links, `#`, active items | `#2563EB` | `#3B82F6` |
+| `accent-2` | "New post", end of the progress bar | `#2563EB` | `#3B82F6` |
+| `accent-soft` | background of active items and callouts | `#2563EB1A` | `#3B82F624` |
 
 - A value is a hex color: `#rgb`, `#rrggbb`, or with two more digits for opacity (`#rrggbbaa`). Put it in quotes: in YAML `#` without quotes starts a comment. `1b1930` without `#` also works.
 - Leave out any color to keep the built-in one.

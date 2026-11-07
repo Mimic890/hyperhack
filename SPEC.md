@@ -62,19 +62,19 @@ CSS custom properties. The theme mechanism does not change: `prefers-color-schem
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--bg` | `#101119` | `#F6F5FB` | page background |
-| `--raise` | `#171925` | `#FFFFFF` | cards, code, menus |
-| `--line` | `#262938` | `#E2E0EE` | borders, dividers |
-| `--text` | `#E7E5F2` | `#1B1930` | main text |
-| `--muted` | `#9C99B3` | `#5D5A75` | metadata, captions |
-| `--uv` | `#8B6CFF` | `#5B3DE6` | accent: links, `#`, active states |
-| `--ember` | `#FF8F57` | `#B9541F` | second accent: "New post", gradient end |
-| `--uv-soft` | `rgba(139,108,255,.14)` | `rgba(91,61,230,.10)` | background of active elements |
+| `--bg` | `#0A0A0A` | `#FFFFFF` | page background |
+| `--raise` | `#171717` | `#F5F5F5` | cards, code, menus |
+| `--line` | `#262626` | `#E5E5E5` | borders, dividers |
+| `--text` | `#EDEDED` | `#171717` | main text |
+| `--muted` | `#A3A3A3` | `#5C5C5C` | metadata, captions |
+| `--uv` | `#3B82F6` | `#2563EB` | accent: links, `#`, active states |
+| `--ember` | `#3B82F6` | `#2563EB` | second accent: "New post", gradient end; the same blue by default |
+| `--uv-soft` | `rgba(59,130,246,.14)` | `rgba(37,99,235,.10)` | background of active elements |
 
 - The `--uv` → `--ember` gradient appears only in the reading progress bar.
 - Text contrast is at least 4.5:1, checked in a test.
-- Text on `--uv-soft` is always `--text`. There `--uv` is only for icons and borders: as text it stays below 4.5:1 in the dark theme.
-- `--ember` text goes only on `--raise`: on `--bg` it stays below 4.5:1 in the light theme.
+- Text on `--uv-soft` is always `--text`. There `--uv` is only for icons and borders.
+- `--ember` text goes only on `--raise` or `--bg`, the pairs the contrast test checks.
 
 #### Own colors
 
@@ -172,7 +172,7 @@ blocks:
 |---|---|---|
 | `intro` | `title`, `text` (both optional) | Heading 46px / 800 and `--muted` subtitle, width ≤ 720px. Without both fields it renders nothing. |
 | `tags` | `limit` (1–20, default 6) | Chip "All posts" and the most used tags: by number of published posts, ties by name. Each chip: `#` in `--uv`, name, post count in `--muted`. |
-| `featured` | none | The latest post. Card tinted with `--uv` (9% over `--raise`, border 24% over `--line`), radius 20px, padding 20px. Left: cover at 1/4 width (`4/3`, radius 14px). Right: "New post" in `--ember` mixed 20% with `--text` (AA on the tint), title 30px, description, date, reading time, tags. No cover: text at full width. |
+| `featured` | none | The latest post. Card on `--raise` with a `--line` border, radius 20px, padding 20px. Left: cover at 1/4 width (`4/3`, radius 14px). Right: "New post" in `--ember`, title 30px, description, date, reading time, tags. No cover: text at full width. |
 | `posts` | `group: year \| none` (default `none`), `limit` (1–100, default `PAGE_SIZE`) | Post list with pagination. Row: date on the left (92px), title 21px / 650 with `--muted` description, reading time on the right. With `year`: year headings 40px / 800 with the year's post count in this list as words ("5 posts"; Russian "1 пост / 2 поста / 5 постов"), and dates without the year. |
 | `popular` | `limit` (1–10, default 4) | Numbered list (1, 2, 3…). Under each title: an eye icon with views in the `POPULAR_DAYS` window, then like and dislike icons with the current vote counts, icons at text size, a wider gap between views and votes. Each icon has a visually hidden label. No RSS link: the top bar has one. |
 
@@ -790,3 +790,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-07 — Year headings say "5 posts" instead of a bare number. Plural forms come from `key_one`, `key_few`, `key_many` in the i18n files; a language with a `_few` form uses the Russian rule, others the English one.
 - 2026-11-07 — Own colors: `theme` with `light` and `dark` maps in `home.md` sets any color token of the site, and the same field in a post sets its page; missing colors fall back to `home.md`, then the built-in ones. Only hex values pass, and the colors go out as a separate content-hashed stylesheet under `/static/theme/`, so the CSP needs no inline styles. A bad entry is ignored with WARN, as in `home.md` blocks.
 - 2026-11-07 — The `popular` block shows likes and dislikes next to views, and an eye icon instead of the word "Views". The votes come from one query for all posts, made only when the block has posts.
+- 2026-11-07 — Built-in palette: plain neutral dark (`#0A0A0A`) and white (`#FFFFFF`) with gray surfaces, borders and secondary text; the only color is a plain blue accent (`#2563EB` light, `#3B82F6` dark), also used for `--ember`, `--uv-soft` and the favicon. The featured card loses its tint and sits on `--raise`. Code highlighting keeps its palette. Own colors in `home.md` work as before.
