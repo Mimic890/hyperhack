@@ -204,6 +204,24 @@ func newPages(log *slog.Logger, cfg *config.Config, d Deps) *pages {
 	return p
 }
 
+// pluralForm picks key_one, key_few or key_many. A language with a key_few form counts
+// like Russian (1, 21 → one; 2–4, 22–24 → few; others many); the rest like English.
+func pluralForm(msgs map[string]string, key string, n int) string {
+	if _, slavic := msgs[key+"_few"]; !slavic {
+		if n == 1 {
+			return "one"
+		}
+		return "many"
+	}
+	switch d, dd := n%10, n%100; {
+	case d == 1 && dd != 11:
+		return "one"
+	case d >= 2 && d <= 4 && (dd < 12 || dd > 14):
+		return "few"
+	}
+	return "many"
+}
+
 // versioned adds a content hash, so the file can be cached forever.
 func versioned(path string, b []byte) string {
 	sum := sha256.Sum256(b)
@@ -229,6 +247,7 @@ func funcs(msgs map[string]string, wpm int) template.FuncMap {
 		"dateShort": func(d time.Time) string {
 			return t("date_short", "day", d.Day(), "month", t("month_"+strconv.Itoa(int(d.Month()))))
 		},
+		"plural":  func(key string, n int) string { return t(key+"_"+pluralForm(msgs, key, n), "n", n) },
 		"minutes": func(words int) int { return max(1, (words+wpm-1)/wpm) },
 		"asset":   assetPath,
 		"add":     func(a, b int) int { return a + b },

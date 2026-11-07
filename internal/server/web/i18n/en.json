@@ -50,6 +50,8 @@
   "all_posts": "All posts",
   "new_post": "New post",
   "tags": "Tags",
+  "posts_one": "{n} post",
+  "posts_many": "{n} posts",
   "views": "Views: {n}",
   "like": "Like",
   "dislike": "Dislike",

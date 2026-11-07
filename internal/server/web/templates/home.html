@@ -49,7 +49,7 @@
 {{- else if eq .Type "posts"}}<section class="post-list" aria-label="{{t "newest"}}">
     {{- if .Years}}
     {{- range .Years}}
-    <h2 class="year">{{.Year}} <span class="n">{{.Count}}</span></h2>
+    <h2 class="year">{{.Year}} <span class="n">{{plural "posts" .Count}}</span></h2>
     {{- range .Posts}}
     {{template "rowshort" .}}
     {{- end}}
