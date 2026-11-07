@@ -142,7 +142,8 @@ No other animations on load or on card hover.
 - Left: logo in a 47×34px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
 - Logos come from `logo` in `home.md`: one path for all, or a map `light` / `dark` (top bar, per effective theme) and `favicon`. Each is an image inside `assets/` (svg, png, jpg, jpeg, webp, avif, gif); a leading `/` is dropped. A bad value or unknown key → only that entry is ignored, WARN. Fallbacks: a missing top bar logo takes the other one; the favicon takes `light`, then `dark`; then `assets/logo.svg` if the bucket has it; then the built-in mark. With two top bar logos both `<img>` are in the page and CSS shows the one of the current theme, like the theme buttons.
 - On post pages at ≥ 1000px: the post title in the middle of the bar, 13px `--muted`, centered, at most two lines (`line-clamp: 2`), up to 36rem wide. It appears (160 ms fade) only after the page title has scrolled under the bar, so the two titles are never seen together; `post.js` watches the `h1` with an `IntersectionObserver`. Without JS it stays hidden. Below 1000px the bar has no title.
-- Right, left to right: search button, theme toggle, RSS link, author's GitHub link (URL from `.env`), language dropdown (`en` / `ru`) last.
+- Right, left to right: search button, theme toggle, RSS link, Telegram, X and GitHub links, language dropdown (`en` / `ru`) last.
+- Social links come from `telegram`, `x` and `github` in `home.md`. A missing or empty field → no button. Each value is an absolute `https` URL with a host and no credentials, at most 500 characters; anything else is ignored with WARN. The buttons have `rel="noopener noreferrer me"`. Without any of the three in `home.md`, GitHub falls back to `GITHUB_URL`. At ≤ 30rem the icon buttons narrow from 44px to 36px, so the bar with all links still fits 375px.
 - Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px, height 36px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
 - Language dropdown: a borderless button `RU ▾`, menu on `--raise`, radius 14px, shadow, active language in `--uv`.
 
@@ -150,7 +151,7 @@ No other animations on load or on card hover.
 
 Built from blocks listed in `home.md`, a file in the vault root. The name is reserved: this file is not a post and stays out of the index, search, RSS, sitemap, `/llms.txt` and `/posts/<slug>.md`. A `home.md` in a subfolder is an ordinary post candidate. The name has no `_` because Remotely Save does not sync such files.
 
-The file holds only YAML frontmatter with a `blocks` list and optional `theme` (see Design → Colors → Own colors) and `logo` (see Top bar); its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
+The file holds only YAML frontmatter with a `blocks` list and optional `theme` (see Design → Colors → Own colors), `logo`, `github`, `x` and `telegram` (see Top bar); its body is ignored. Blocks appear from top to bottom in file order. The file is read again on sync, like posts.
 
 ```yaml
 ---
@@ -211,7 +212,7 @@ Proposed variables (final names set during implementation):
 | `SITE_NAME`, `SITE_URL` | Site name and public URL. |
 | `AUTHOR_NAME` | Optional. Author in JSON-LD and RSS. Default: `SITE_NAME`. |
 | `DEFAULT_LANG` | UI language and default post language: `en` or `ru`. Default `en`. |
-| `GITHUB_URL` | Link in the top bar. |
+| `GITHUB_URL` | GitHub link in the top bar when `home.md` sets no social links. |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Bucket access. `S3_ENDPOINT` must be `https://`. `S3_REGION` default: `garage`. |
 | `POLL_INTERVAL` | Bucket polling interval. Default: `60s`, range 10s–24h. |
 | `REINDEX_TOKEN` | Token for `POST /reindex`. |
@@ -794,3 +795,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-07 — Built-in palette: plain neutral dark (`#0A0A0A`) and white (`#FFFFFF`) with gray surfaces, borders and secondary text; the only color is a plain blue accent (`#2563EB` light, `#3B82F6` dark), also used for `--ember`, `--uv-soft` and the favicon. The featured card loses its tint and sits on `--raise`. Code highlighting keeps its palette. Own colors in `home.md` work as before.
 - 2026-11-07 — Top bar logo box grows from 40×29px to 47×34px (about 17%), same aspect ratio: the mark looked too small next to the 21px site name.
 - 2026-11-07 — Logos in `home.md`: `logo` sets the top bar logo for the light and the dark theme and a separate favicon, as paths inside `assets/`. `assets/logo.svg` stays as the fallback, so existing sites do not change. The icon link loses `type="image/svg+xml"`, since the favicon can now be a PNG.
+- 2026-11-07 — Social links in `home.md`: `github`, `x` and `telegram` add Telegram and X buttons with their marks and move the GitHub link out of `.env`; a missing field hides its button. `GITHUB_URL` stays as the fallback when `home.md` sets none of the three. Icon buttons narrow to 36px at ≤ 30rem so the bar keeps one row.

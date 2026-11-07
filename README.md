@@ -103,7 +103,7 @@ All settings come from environment variables in `.env`. [.env.example](.env.exam
 | `SITE_URL` | required | Public URL, `https://example.com`. Used for canonical links, RSS, the sitemap and the `Origin` check. |
 | `AUTHOR_NAME` | `SITE_NAME` | Author in JSON-LD and RSS. |
 | `DEFAULT_LANG` | `en` | UI language and default post language: `en` or `ru`. |
-| `GITHUB_URL` | empty | GitHub link in the top bar. |
+| `GITHUB_URL` | empty | GitHub link in the top bar when `home.md` sets no social links. See [Social links](#social-links). |
 | `S3_ENDPOINT` | required | Garage S3 API URL, `https://` only. |
 | `S3_REGION` | `garage` | S3 region. |
 | `S3_BUCKET` | required | Bucket name. |
@@ -271,6 +271,20 @@ logo:
 - In the top bar a logo fits a 47×34 px box. Without `dark` the light logo is used in both themes, and the other way round.
 - Without `favicon` the tab icon is the light logo. Without any `logo`, `assets/logo.svg` is used if it exists, else the built-in mark.
 - A bad path or unknown key is ignored with a WARN in the log.
+
+### Social links
+
+`github`, `x` and `telegram` in `home.md`, next to `blocks`, add buttons with their logos to the top bar:
+
+```yaml
+github: https://github.com/example
+x: https://x.com/example
+telegram: https://t.me/example
+```
+
+- A link must be a full `https://` address. A field that is missing or empty has no button.
+- Without any of the three, the GitHub button uses `GITHUB_URL` from `.env`, as before.
+- A bad link is ignored with a WARN in the log.
 
 ## Publishing from Obsidian
 
