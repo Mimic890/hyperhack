@@ -3,6 +3,7 @@ package content
 import (
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -82,36 +83,86 @@ func TestParseHomeDefaults(t *testing.T) {
 }
 
 func TestParseHomeSkipsBadBlocks(t *testing.T) {
-	long := strings.Repeat("я", maxBlockTitle+1)
-	for _, bad := range []string{
-		"{type: nope}",
-		"{title: no type}",
-		"text only",
-		"{type: tags, limit: 0}",
-		"{type: tags, limit: 21}",
-		"{type: tags, limit: six}",
-		"{type: tags, limit: 1.5}",
-		"{type: popular, limit: 11}",
-		"{type: posts, limit: 101}",
-		"{type: posts, group: month}",
-		"{type: posts, group: [year]}",
-		"{type: tags, area: left}",
-		"{type: tags, title: not for tags}",
-		"{type: featured, limit: 1}",
-		"{type: intro, limt: 1}",
-		"{type: intro, title: 2026}",
-		"{type: intro, title: [a]}",
-		"{type: intro, title: {russian: a}}",
-		"{type: intro, title: {ru: [a]}}",
-		"{type: intro, title: " + long + "}",
-		"{type: intro, title: {ru: " + long + "}}",
-		"{type: intro, text: " + strings.Repeat("a", maxBlockText+1) + "}",
-	} {
+	for _, bad := range []string{"{type: nope}", "{title: no type}", "text only"} {
 		blocks, problems := ParseHome(home("blocks:\n  - type: featured\n  - " + bad + "\n"))
 		if len(blocks) != 1 || blocks[0].Type != BlockFeatured || len(problems) != 1 {
 			t.Errorf("%.60s: blocks = %+v, problems = %v", bad, blocks, problems)
 		}
 	}
+}
+
+// A bad or unknown field is dropped with a warning; the block stays with its defaults.
+func TestParseHomeIgnoresBadFields(t *testing.T) {
+	long := strings.Repeat("я", maxBlockTitle+1)
+	for _, c := range []struct{ field, want string }{
+		{"limit: 0", "tags/6"},
+		{"limit: 21", "tags/6"},
+		{"limit: six", "tags/6"},
+		{"limit: 1.5", "tags/6"},
+		{"area: left", "tags/6"},
+		{"title: not for tags", "tags/6"},
+		{"limt: 1", "tags/6"},
+	} {
+		blocks, problems := ParseHome(home("blocks:\n  - {type: tags, " + c.field + "}\n"))
+		got := ""
+		if len(blocks) == 1 {
+			got = blocks[0].Type + "/" + strconv.Itoa(blocks[0].Limit)
+		}
+		if got != c.want || blocks[0].Side || len(problems) != 1 {
+			t.Errorf("%s: %+v, problems = %v", c.field, blocks, problems)
+		}
+	}
+	for _, field := range []string{
+		"text: [a]",
+		"text: {russian: a}",
+		"text: {ru: [a]}",
+		"text: " + strings.Repeat("a", maxBlockText+1),
+		"description: x",
+	} {
+		blocks, problems := ParseHome(home("blocks:\n  - {type: intro, title: Hi, " + field + "}\n"))
+		if len(blocks) != 1 || blocks[0].Title.In("en") != "Hi" || blocks[0].Text != nil || len(problems) != 1 {
+			t.Errorf("%.60s: %+v, problems = %v", field, blocks, problems)
+		}
+	}
+	for _, field := range []string{"title: " + long, "title: {ru: " + long + "}", "title: [a]"} {
+		blocks, problems := ParseHome(home("blocks:\n  - {type: intro, text: Body, " + field + "}\n"))
+		if len(blocks) != 1 || blocks[0].Title != nil || blocks[0].Text.In("en") != "Body" || len(problems) != 1 {
+			t.Errorf("%.60s: %+v, problems = %v", field, blocks, problems)
+		}
+	}
+	for _, c := range []struct{ field, want string }{
+		{"posts, limit: 101", "posts/0"},
+		{"posts, group: month", "posts/0"},
+		{"posts, group: [year]", "posts/0"},
+		{"popular, limit: 11", "popular/4"},
+		{"featured, limit: 1", "featured/0"},
+	} {
+		blocks, problems := ParseHome(home("blocks:\n  - {type: " + c.field + "}\n"))
+		if len(blocks) != 1 || blocks[0].Type+"/"+strconv.Itoa(blocks[0].Limit) != c.want || blocks[0].GroupYear || len(problems) != 1 {
+			t.Errorf("%s: %+v, problems = %v", c.field, blocks, problems)
+		}
+	}
+}
+
+// Clearing a text in Obsidian leaves an empty value: the title must survive it.
+func TestParseHomeEmptyText(t *testing.T) {
+	for _, field := range []string{"text:", `text: ""`, "text: {en: , ru: }", "text: {en: '', ru: ' '}"} {
+		blocks, problems := ParseHome(home("blocks:\n  - type: intro\n    title: Hi\n    " + field + "\n"))
+		if len(blocks) != 1 || blocks[0].Title.In("ru") != "Hi" || blocks[0].Text.In("ru") != "" || len(problems) != 0 {
+			t.Errorf("%s: %+v, problems = %v", field, blocks, problems)
+		}
+	}
+	blocks, _ := ParseHome(home("blocks:\n  - type: intro\n    title: {en: Hi, ru: Привет}\n    text:\n      en:\n      ru: Текст\n"))
+	if b := blocks[0]; b.Title.In("ru") != "Привет" || b.Text.In("ru") != "Текст" || b.Text.In("en") != "Текст" {
+		t.Errorf("one empty language: %+v", b)
+	}
+	blocks, _ = ParseHome(home("blocks:\n  - {type: intro, title: 2026}\n"))
+	if blocks[0].Title.In("en") != "2026" {
+		t.Errorf("number title: %+v", blocks[0])
+	}
+}
+
+func TestParseHomeAtLimits(t *testing.T) {
 	// At the limits, and an empty Obsidian property.
 	blocks, problems := ParseHome(home("blocks:\n  - {type: intro, title: " + strings.Repeat("я", maxBlockTitle) + ", text: }\n"))
 	if len(blocks) != 1 || len(problems) != 0 || blocks[0].Text != nil {
