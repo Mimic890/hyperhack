@@ -114,9 +114,9 @@ No other animations on load or on card hover.
 
 ### Top bar
 
-- On all pages. Height 72px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
+- On all pages. Height 60px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
 - Left: logo in a 40×29px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
-- On post pages at ≥ 1000px: the post title next to the logo, `--muted`, cut with `ellipsis`.
+- On post pages at ≥ 1000px: the post title in the middle of the bar, 13px `--muted`, centered, at most two lines (`line-clamp: 2`), up to 36rem wide.
 - Right, left to right: search button, theme toggle, RSS link, author's GitHub link (URL from `.env`), language dropdown (`en` / `ru`) last.
 - Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px, height 36px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
 - Language dropdown: a borderless button `RU ▾`, menu on `--raise`, radius 14px, shadow, active language in `--uv`.
@@ -172,7 +172,7 @@ blocks:
 - Table of contents: built on the server from h2–h4, which already have ids. A tree: h3 indented 30px, h4 46px with a smaller font. Each item has a 2px `--line` line on its left. Active item: `--text`, `--uv` line, weight 600; its parent h2 is `--text` too. The column is `position: sticky; top: 96px`. `post.js` marks the active item with `IntersectionObserver`. No headings: no contents.
 - Heading markers: `##` hangs in the margin left of h2 and `###` left of h3. CSS `::before`, not text; JetBrains Mono, `--uv`, opacity 0.6 and 0.45. Brighter on hover; a click copies the link to the section (JS). None below 1000px.
 - Code blocks and callouts: see Content features.
-- Post footer: "Was this post helpful?", like, dislike. On the right, "Share": `navigator.share()` with title and URL when available, otherwise copies the URL and says "Link copied" in `role="status"`. No button without JS. Below, two cards: "Previous post" (the next older one, if any) and "All posts".
+- Post footer: "Was this post helpful?", like, dislike. On the right, "Share" as a 44px icon button (three linked dots, the label in `aria-label` and `title`): `navigator.share()` with title and URL when available, otherwise copies the URL and says "Link copied" in `role="status"`. No button without JS. Below, two cards: "Previous post" (the next older one, if any) and "All posts". Cards: min height 64px, padding 12px 18px, radius 16px, title at most two lines. At ≤ 640px the question takes its own row, the buttons and "Share" the next.
 
 ## Configuration
 
@@ -758,4 +758,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-06 — Search palette details: `search.js` loads on every page and also serves the live results on `/search`, so the palette needs no new endpoint. `#tag` tokens stay out of the stored search queries: only words are stored, so typed tags cannot fill the table. Past either end of the list nothing is selected, and `Enter` opens the results page, the only way from the palette to results beyond the first page.
 - 2026-11-07 — Motion details: `transition.js` is the only blocking script, because a deferred one misses `pagereveal`. The cover name goes on the whole banner, so the fade stays during the transition, and the post header gets its own name, so the cover does not paint over tags and metadata. Names go on block boxes only, since a wrapped inline link would skip the transition. `scale(.94)` and the number animation apply to like and dislike.
 - 2026-11-07 — Math and diagrams in Obsidian syntax. Math: `$…$` / `$$…$$` turned into MathML on the server with `treeblood` `v0.1.16` and an own goldmark parser (the `goldmark-treeblood` wrapper treats any `$` as math); MathML allowlist in `bluemonday`. Diagrams: ` ```mermaid ` drawn in the browser by Pele 1.13.0, vendored and loaded only on posts that have one; Pele style attributes move to CSSOM, so the CSP stays as it is; zoom off. Fallback in both: the source stays visible.
-- 2026-11-07 — Top bar and featured card: the language dropdown moves to the right end of the top bar (its own `/prefs` form). The main page search button is 36px high instead of 44px. The featured card gets a `--uv` tint so it stands out from the page; its "New post" label mixes `--ember` with 20% `--text`, because plain `--ember` on the light tint measured 4.24:1 (now 5.57:1 light, 8.01:1 dark).
+- 2026-11-07 — Top bar and featured card: the language dropdown moves to the right end of the top bar (its own `/prefs` form). The main page search button is 36px high instead of 44px. The featured card gets a `--uv` tint so it stands out from the page; its "New post" label mixes `--ember` with 20% `--text`, because plain `--ember` on the light tint measured 4.24:1 (now 5.57:1 light, 8.01:1 dark). The top bar is 60px instead of 72px; on post pages the title sits in the middle of the bar, centered, up to two lines. "Share" becomes an icon button. The cards below the votes are lower: min height 64px instead of 88px, title at most two lines.
