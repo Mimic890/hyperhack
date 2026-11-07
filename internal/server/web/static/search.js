@@ -55,7 +55,7 @@
   const paletteStatus = dialog.querySelector("[role=status]");
   let tags = [];
   try {
-    tags = JSON.parse(document.getElementById("tag-data")?.textContent || "[]");
+    tags = JSON.parse(document.getElementById("tag-data")?.textContent || "[]") || []; // a site without tags sends null
   } catch {
     // no suggestions
   }
