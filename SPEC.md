@@ -139,7 +139,7 @@ No other animations on load or on card hover.
 ### Top bar
 
 - On all pages. Height 60px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
-- Left: logo in a 40×29px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
+- Left: logo in a 47×34px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
 - On post pages at ≥ 1000px: the post title in the middle of the bar, 13px `--muted`, centered, at most two lines (`line-clamp: 2`), up to 36rem wide. It appears (160 ms fade) only after the page title has scrolled under the bar, so the two titles are never seen together; `post.js` watches the `h1` with an `IntersectionObserver`. Without JS it stays hidden. Below 1000px the bar has no title.
 - Right, left to right: search button, theme toggle, RSS link, author's GitHub link (URL from `.env`), language dropdown (`en` / `ru`) last.
 - Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px, height 36px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
@@ -791,3 +791,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-07 — Own colors: `theme` with `light` and `dark` maps in `home.md` sets any color token of the site, and the same field in a post sets its page; missing colors fall back to `home.md`, then the built-in ones. Only hex values pass, and the colors go out as a separate content-hashed stylesheet under `/static/theme/`, so the CSP needs no inline styles. A bad entry is ignored with WARN, as in `home.md` blocks.
 - 2026-11-07 — The `popular` block shows likes and dislikes next to views, and an eye icon instead of the word "Views". The votes come from one query for all posts, made only when the block has posts.
 - 2026-11-07 — Built-in palette: plain neutral dark (`#0A0A0A`) and white (`#FFFFFF`) with gray surfaces, borders and secondary text; the only color is a plain blue accent (`#2563EB` light, `#3B82F6` dark), also used for `--ember`, `--uv-soft` and the favicon. The featured card loses its tint and sits on `--raise`. Code highlighting keeps its palette. Own colors in `home.md` work as before.
+- 2026-11-07 — Top bar logo box grows from 40×29px to 47×34px (about 17%), same aspect ratio: the mark looked too small next to the 21px site name.
