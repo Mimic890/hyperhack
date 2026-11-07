@@ -166,6 +166,15 @@
     });
   }
 
+  // The post title shows in the top bar only after the page title has scrolled under it.
+  const bar = document.querySelector(".topbar");
+  const h1 = article.querySelector("h1");
+  if (bar && h1 && "IntersectionObserver" in window) {
+    new IntersectionObserver(([e]) => {
+      bar.classList.toggle("past-title", !e.isIntersecting && e.boundingClientRect.top < bar.offsetHeight);
+    }, { rootMargin: `-${bar.offsetHeight}px 0px 0px 0px` }).observe(h1);
+  }
+
   const share = article.querySelector(".share");
   if (share && (navigator.share || clip)) {
     share.hidden = false;

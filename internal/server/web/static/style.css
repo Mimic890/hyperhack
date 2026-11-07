@@ -90,8 +90,9 @@ img { max-width: 100%; height: auto; }
 .brand span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .brand:hover span { text-decoration: underline; text-underline-offset: 0.2em; }
 .progress { display: none; }
-/* Post title in the middle of the bar: small, up to two lines. */
+/* Post title in the middle of the bar: small, up to two lines, shown by post.js once the page title is out of view. */
 .bar-title {
+  visibility: hidden; opacity: 0;
   display: none; min-width: 0; overflow: hidden; color: var(--muted); font-size: 0.8125rem; line-height: 1.3; text-align: center;
   -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
 }
@@ -298,6 +299,7 @@ main > .post { max-width: none; }
   /* Equal side columns keep the title centered while both sides fit. */
   .topbar:has(.bar-title) { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, 36rem) minmax(max-content, 1fr); }
   .topbar:has(.bar-title) .tools { justify-self: end; }
+  .topbar.past-title .bar-title { visibility: visible; opacity: 1; }
   .banner + main .post-head { margin-top: -150px; }
   .post-grid { display: grid; grid-template-columns: minmax(0, 680px) 250px; gap: 80px; align-items: start; }
   .toc-details { display: none; }
@@ -443,6 +445,7 @@ code, pre { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, 
 }
 /* Motion. TestMotionGated keeps all of it in this block. */
 @media (prefers-reduced-motion: no-preference) {
+  .bar-title { transition: opacity 160ms ease-out, visibility 160ms; }
   html { scroll-behavior: smooth; }
 
   /* List to post. transition.js names the title and the cover. */

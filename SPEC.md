@@ -116,7 +116,7 @@ No other animations on load or on card hover.
 
 - On all pages. Height 60px, `position: sticky`, background `--bg` at 82% with `backdrop-filter: blur(12px)`, bottom border `--line`.
 - Left: logo in a 40×29px box (`object-fit: contain`), then site name 21px / 750. At ≤ 640px the name is hidden and stays in the link's `aria-label`, so the bar fits one row.
-- On post pages at ≥ 1000px: the post title in the middle of the bar, 13px `--muted`, centered, at most two lines (`line-clamp: 2`), up to 36rem wide.
+- On post pages at ≥ 1000px: the post title in the middle of the bar, 13px `--muted`, centered, at most two lines (`line-clamp: 2`), up to 36rem wide. It appears (160 ms fade) only after the page title has scrolled under the bar, so the two titles are never seen together; `post.js` watches the `h1` with an `IntersectionObserver`. Without JS it stays hidden. Below 1000px the bar has no title.
 - Right, left to right: search button, theme toggle, RSS link, author's GitHub link (URL from `.env`), language dropdown (`en` / `ru`) last.
 - Search button: on the main page a field-like button "Search posts" with the hint `Ctrl K`, width ≥ 220px, height 36px. On other pages and at ≤ 640px: icon only. Without JS it is a link to `/search`.
 - Language dropdown: a borderless button `RU ▾`, menu on `--raise`, radius 14px, shadow, active language in `--uv`.
