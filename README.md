@@ -215,12 +215,12 @@ blocks:
 | `tags` | `limit` 1–20, default 6 | "All posts" and the most used tags with post counts. |
 | `featured` | none | The latest post as a card. |
 | `posts` | `group: year` or `none` (default), `limit` 1–100, default `PAGE_SIZE` | Post list with pagination, without the `featured` post. Only the first `posts` block is used. |
-| `popular` | `limit` 1–10, default 4 | Most viewed posts of the last `POPULAR_DAYS` days and an RSS link. Hidden until there are views. |
+| `popular` | `limit` 1–10, default 4 | Most viewed posts of the last `POPULAR_DAYS` days. Hidden until there are views. |
 
 - Blocks appear from top to bottom in file order. Pages 2 and on show only the `posts` block.
 - `area: side` puts any block into a right column on screens from 860 px; below that it goes after the others.
 - `title` and `text` are a string or a map by language. With no entry for the reader's language, the first one is used.
-- An unknown `type`, an unknown field or an invalid value skips the block. With no `home.md`, invalid YAML or no valid blocks, the default blocks are used. Each case logs a WARN once, when the file changes or at startup.
+- An unknown or missing `type` skips the block. An unknown field or an invalid value skips only that field, so a block keeps the rest: an `intro` with a broken `text` still shows its title. An empty value, also for one language, means no text. With no `home.md`, invalid YAML or no valid blocks, the default blocks are used. Each case logs a WARN once, when the file changes or at startup.
 - When upgrading: a `home.md` in the root that was a post stops being one, so rename it. `POPULAR_LIMIT` in `.env` no longer has any effect.
 
 ## Publishing from Obsidian
