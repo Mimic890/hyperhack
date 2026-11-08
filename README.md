@@ -4,7 +4,7 @@ Russian version: [README.ru.md](README.ru.md).
 
 A light, fast blog for one author. It replaces Ghost when Ghost is too heavy.
 
-You write posts in Obsidian. The vault syncs to an S3 bucket (Garage) and the blog renders it. The whole service is one Go binary with SQLite. There is no admin panel and no database server.
+You write posts in Obsidian or any Markdown editor. The blog reads them from an S3 bucket (Garage) or a local folder and renders them. The whole service is one Go binary with SQLite. There is no admin panel and no database server.
 
 - Posts are Markdown files with Obsidian properties (YAML frontmatter).
 - Pages are rendered on the server and work without JS.
@@ -16,7 +16,25 @@ You write posts in Obsidian. The vault syncs to an S3 bucket (Garage) and the bl
 
 The design is in [SPEC.md](SPEC.md).
 
-## How it fits together
+## Try the demo
+
+You only need Docker with Docker Compose:
+
+```sh
+git clone https://github.com/Mimic890/hyperhack.git
+cd hyperhack
+docker compose -f demo/compose.yml up --build
+```
+
+The first start builds the image and can take a few minutes. Then open <http://127.0.0.1:8080>.
+
+The pages come from the files in `demo/vault`. Edit or delete one and reload: the change appears after the next poll, within 10 seconds.
+
+The demo is for your own computer. Its port is bound to loopback, its secrets are public, and its database is in memory, so views and votes reset on every start.
+
+## Production
+
+### How it fits together
 
 ```
 Obsidian ──Remotely Save──▶ Garage bucket ◀──poll── hyperhack ──▶ ./data (SQLite)
@@ -27,16 +45,16 @@ reader ──▶ Caddy ──┬──▶ hyperhack :8080         (pages, /api/*
 VictoriaMetrics ──scrape /metrics──▶ hyperhack ;  Grafana ──▶ VictoriaMetrics
 ```
 
-The bucket is the source of truth. The service polls it and mirrors it to `./vault`. Caddy serves images straight from the mirror, so pages and images keep working while S3 is down.
+The bucket is the source of truth. The service polls it and mirrors it to `./vault`. Caddy serves images straight from the mirror, so pages and images keep working while S3 is down. With a [local folder](#content-from-a-local-folder), that folder takes the place of the bucket.
 
-## Requirements
+### Requirements
 
 - Docker with Docker Compose.
-- An S3 API bucket over HTTPS. Garage is what this is built and tested for.
-- Caddy as the reverse proxy, built with the `caddy-ratelimit` and CrowdSec bouncer plugins. See [Caddy](#caddy).
-- Optional: VictoriaMetrics and Grafana for metrics, and CrowdSec.
+- A content source, one of the two: an S3 API bucket over HTTPS (Garage is what this is built and tested for), or a local folder you keep in sync yourself.
+- A reverse proxy for TLS. Caddy with the `caddy-ratelimit` and CrowdSec bouncer plugins is recommended for a public site. [Caddyfile.minimal.example](Caddyfile.minimal.example) runs on the stock `caddy` image. See [Caddy](#caddy).
+- Optional: VictoriaMetrics and Grafana for metrics.
 
-## Quick start
+### Quick start
 
 1. Download the compose file and the env file:
 
@@ -58,7 +76,7 @@ The bucket is the source of truth. The service polls it and mirrors it to `./vau
 
    Caddy must be able to read `vault/assets/`. The service writes folders as `0755` and files as `0644`. The SQLite file is `0600`.
 
-3. Fill `.env` (see [Configuration](#configuration)). Generate each secret with:
+3. Fill `.env` (see [Configuration](#configuration)). The service refuses to start while a secret or S3 key still contains the `change-me` sample. Generate each secret with:
 
    ```sh
    openssl rand -base64 48
@@ -73,11 +91,27 @@ The bucket is the source of truth. The service polls it and mirrors it to `./vau
    docker compose logs -f
    ```
 
-   On the first start the service needs the bucket. If S3 is unreachable and there is no mirror yet, it exits with code 1. Later starts build the index from the mirror and do not wait for S3.
+   On the first start the service needs its content source. If it is unreachable and there is no mirror yet, the service exits with code 1. Later starts build the index from the mirror and do not wait for the source.
 
 5. Set up Caddy (see [Caddy](#caddy)) and set `TRUSTED_PROXIES`.
 
 The service listens on port `8080` inside the container. Compose publishes it on `127.0.0.1:8080` only. Do not expose it to the internet: Caddy is the only public entry.
+
+### Content from a local folder
+
+Keep the vault in a folder with Syncthing, git, Obsidian Sync or anything else, and mount it read-only. Add one line to `volumes:` in `docker-compose.yml`:
+
+```yaml
+      - ./my-vault:/source:ro
+```
+
+In `.env`, set `LOCAL_VAULT_DIR=/source` and remove the values of `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY` and `S3_SECRET_KEY`. Setting both sources stops the service at startup.
+
+- The service checks the size and modification time of each file every `POLL_INTERVAL` and copies changes to `./vault`. It never writes to your folder.
+- User `10001` needs read access to the folder.
+- Files and folders starting with `.` or `_` are skipped, so `.git` and `.obsidian` stay private. Symlinks are not followed.
+- An empty or missing folder is an error. The site keeps serving its last copy, so a failed mount cannot wipe it.
+- In this mode the service also serves `/assets/*` itself, so it works without a reverse proxy on your own computer. Caddy still serves those paths first when it is in front.
 
 ## Garage: bucket and keys
 
@@ -104,10 +138,11 @@ All settings come from environment variables in `.env`. [.env.example](.env.exam
 | `AUTHOR_NAME` | `SITE_NAME` | Author in JSON-LD and RSS. |
 | `DEFAULT_LANG` | `en` | UI language and default post language: `en` or `ru`. |
 | `GITHUB_URL` | empty | GitHub link in the top bar when `home.md` sets no social links. See [Social links](#social-links). |
-| `S3_ENDPOINT` | required | Garage S3 API URL, `https://` only. |
+| `LOCAL_VAULT_DIR` | empty | Folder to use instead of S3. See [Content from a local folder](#content-from-a-local-folder). |
+| `S3_ENDPOINT` | required with S3 | Garage S3 API URL, `https://` only. |
 | `S3_REGION` | `garage` | S3 region. |
-| `S3_BUCKET` | required | Bucket name. |
-| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | required | The read-only key. |
+| `S3_BUCKET` | required with S3 | Bucket name. |
+| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | required with S3 | The read-only key. |
 | `POLL_INTERVAL` | `60s` | Bucket polling interval, 10s to 24h. |
 | `REINDEX_TOKEN` | required | Bearer token for `POST /reindex`. At least 32 bytes. |
 | `ALTCHA_HMAC_KEY` | required | Signs ALTCHA challenges. At least 32 bytes. |
@@ -318,7 +353,7 @@ It waits for the sync and returns `204` when done, `401` for a bad token, `403` 
 
 Caddy terminates TLS and adds the perimeter controls: per-client rate limit, CrowdSec, HSTS and the request body limit. It blocks `/metrics` and `/reindex` and serves `/assets/*` from the mirror.
 
-Build Caddy with the two plugins:
+For a public site, build Caddy with the two plugins:
 
 ```sh
 xcaddy build v2.11.7 \
@@ -391,7 +426,7 @@ example.com {
 - `CROWDSEC_API_URL` and `CROWDSEC_API_KEY` are read from Caddy's environment when the config loads. The CrowdSec LAPI also defaults to port `8080`, so move one of them if both run on the host.
 - The service sets its own CSP and security headers. Caddy adds only HSTS and removes `Server`.
 - The site-wide limit is 1200 requests per minute per client IP. It counts pages and API calls; `/static/*` and `/assets/*` are not counted, so images and fonts never use it up.
-- Without the plugins, delete the `order`, `crowdsec`, `@limited` and `rate_limit` lines. The service still rate-limits its write endpoints.
+- Without the plugins, use [Caddyfile.minimal.example](Caddyfile.minimal.example) on the stock `caddy` image. The service still rate-limits `/search` and its write endpoints, but pages have no per-client limit and CrowdSec blocks nobody.
 
 ### TRUSTED_PROXIES
 
