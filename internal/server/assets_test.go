@@ -3,8 +3,10 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Mimic890/hyperhack/internal/content"
@@ -84,5 +86,24 @@ func TestAssetsNotServedWithS3(t *testing.T) {
 	h, _ := assetHandler(t, false)
 	if got := do(h, "GET", "/assets/a.png").Code; got != http.StatusNotFound {
 		t.Errorf("/assets/a.png = %d, want 404", got)
+	}
+}
+
+func TestCSPUpgradeOnlyDroppedForLocalHTTP(t *testing.T) {
+	for _, c := range []struct {
+		local, https, want bool
+	}{{true, false, false}, {true, true, true}, {false, false, true}, {false, true, true}} {
+		cfg := testConfig()
+		if !c.https {
+			cfg.SiteURL = &url.URL{Scheme: "http", Host: "127.0.0.1:8080"}
+		}
+		if c.local {
+			cfg.LocalVaultDir = "/source"
+		}
+		h := New(slog.New(slog.DiscardHandler), cfg, testDeps(t, func() *content.Index { return nil }))
+		got := strings.Contains(do(h, "GET", "/healthz").Header().Get("Content-Security-Policy"), "upgrade-insecure-requests")
+		if got != c.want {
+			t.Errorf("local %v, https %v: upgrade = %v", c.local, c.https, got)
+		}
 	}
 }

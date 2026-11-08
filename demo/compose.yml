@@ -1,0 +1,40 @@
+# Local demo: one command, no S3, no reverse proxy, nothing to configure.
+#   docker compose -f demo/compose.yml up --build
+# Then open http://127.0.0.1:8080 and edit the files in demo/vault.
+#
+# Not for production. The secrets below are public and only safe because the
+# port is bound to loopback. SQLite and the mirror live in tmpfs, so they reset
+# on every start. For a real site see README.
+name: hyperhack-demo
+services:
+  hyperhack:
+    image: hyperhack:demo
+    build: ..
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # tmpfs owned by the container user, so a fresh clone needs no chown.
+    tmpfs:
+      - /tmp
+      - /data:uid=10001,gid=10001,mode=0700
+      - /vault:uid=10001,gid=10001,mode=0755
+    ports: ["127.0.0.1:8080:8080"]
+    volumes:
+      - ./vault:/source:ro
+    environment:
+      SITE_NAME: hyperhack demo
+      SITE_URL: http://127.0.0.1:8080
+      LOCAL_VAULT_DIR: /source
+      POLL_INTERVAL: 10s
+      LOG_FORMAT: text
+      REINDEX_TOKEN: demo-only-public-value-reindex-token
+      ALTCHA_HMAC_KEY: demo-only-public-value-altcha-hmac-key
+      VISITOR_SECRET: demo-only-public-value-visitor-secret
+    mem_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "/hyperhack", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
