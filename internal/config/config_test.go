@@ -58,6 +58,29 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsPlaceholders(t *testing.T) {
+	const long = "change-me-to-at-least-32-random-bytes"
+	cases := map[string]string{
+		"REINDEX_TOKEN":   long,
+		"ALTCHA_HMAC_KEY": long,
+		"VISITOR_SECRET":  "prefix-CHANGE-ME-suffix-with-enough-bytes",
+		"S3_ACCESS_KEY":   "change-me",
+		"S3_SECRET_KEY":   "change-me",
+	}
+	for name, value := range cases {
+		env := validEnv()
+		env[name] = value
+		_, err := load(env)
+		if err == nil || !strings.Contains(err.Error(), name+": still the placeholder") {
+			t.Errorf("%s: err = %v", name, err)
+			continue
+		}
+		if strings.Contains(err.Error(), value) {
+			t.Errorf("%s: the error leaks the value: %v", name, err)
+		}
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	cases := map[string]string{
 		"SITE_NAME":        "",

@@ -75,6 +75,9 @@ type Config struct {
 
 const minSecretLen = 32
 
+// placeholder marks the sample values in .env.example; they are public, so they must never run.
+const placeholder = "change-me"
+
 var indexNowKeyRe = regexp.MustCompile(`^[a-zA-Z0-9-]{8,128}$`)
 
 // privateRanges is the default for METRICS_ALLOW and REINDEX_ALLOW: loopback and private ranges.
@@ -94,8 +97,8 @@ func Load(getenv func(string) string) (*Config, error) {
 		S3Endpoint:  l.url("S3_ENDPOINT", true, "https"),
 		S3Region:    l.str("S3_REGION", "garage"),
 		S3Bucket:    l.required("S3_BUCKET"),
-		S3AccessKey: l.required("S3_ACCESS_KEY"),
-		S3SecretKey: l.required("S3_SECRET_KEY"),
+		S3AccessKey: l.credential("S3_ACCESS_KEY"),
+		S3SecretKey: l.credential("S3_SECRET_KEY"),
 
 		PollInterval: l.duration("POLL_INTERVAL", "60s", 10*time.Second, 24*time.Hour),
 
@@ -188,7 +191,21 @@ func (l *loader) secret(name string) string {
 	if len(v) < minSecretLen {
 		l.fail(name, "required, at least %d bytes", minSecretLen)
 	}
+	l.rejectPlaceholder(name, v)
 	return v
+}
+
+// credential reads a required value that must not be left at its .env.example placeholder.
+func (l *loader) credential(name string) string {
+	v := l.required(name)
+	l.rejectPlaceholder(name, v)
+	return v
+}
+
+func (l *loader) rejectPlaceholder(name, v string) {
+	if strings.Contains(strings.ToLower(v), placeholder) {
+		l.fail(name, "still the placeholder from .env.example; generate a value with: openssl rand -base64 48")
+	}
 }
 
 func (l *loader) enum(name, def string, allowed ...string) string {
