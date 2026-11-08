@@ -51,8 +51,11 @@ func run() int {
 		return 1
 	}
 	defer func() { _ = st.Close() }()
-	bucket, err := syncer.NewS3(cfg.S3Endpoint, cfg.S3Region, cfg.S3Bucket, cfg.S3AccessKey, cfg.S3SecretKey)
-	if err != nil {
+	local := cfg.LocalVaultDir != ""
+	var bucket syncer.Bucket
+	if local {
+		bucket = syncer.NewLocal(cfg.LocalVaultDir)
+	} else if bucket, err = syncer.NewS3(cfg.S3Endpoint, cfg.S3Region, cfg.S3Bucket, cfg.S3AccessKey, cfg.S3SecretKey); err != nil {
 		mainLog.Error("S3 client", "err", err)
 		return 1
 	}
@@ -65,6 +68,7 @@ func run() int {
 		MaxObjects:    cfg.MaxObjects,
 		SiteURL:       cfg.SiteURL,
 		IndexNowKey:   cfg.IndexNowKey,
+		Local:         local,
 	}, log)
 
 	var ready atomic.Bool
@@ -98,7 +102,11 @@ func run() int {
 		return 1
 	case err := <-syncErr:
 		if err != nil {
-			mainLog.Error("no local mirror and S3 unavailable", "err", err)
+			msg := "no local mirror and S3 unavailable"
+			if local {
+				msg = "no local mirror and local vault unavailable"
+			}
+			mainLog.Error(msg, "err", err)
 			code = 1
 		}
 	case <-ctx.Done():

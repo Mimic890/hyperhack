@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net/netip"
 	"strings"
 	"testing"
@@ -77,6 +78,61 @@ func TestLoadRejectsPlaceholders(t *testing.T) {
 		}
 		if strings.Contains(err.Error(), value) {
 			t.Errorf("%s: the error leaks the value: %v", name, err)
+		}
+	}
+}
+
+func localEnv() map[string]string {
+	env := validEnv()
+	for _, k := range []string{"S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY"} {
+		delete(env, k)
+	}
+	env["LOCAL_VAULT_DIR"] = "/source"
+	return env
+}
+
+func TestLoadLocalSource(t *testing.T) {
+	c, err := load(localEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.LocalVaultDir != "/source" || c.S3Endpoint != nil {
+		t.Errorf("local = %q, endpoint = %v", c.LocalVaultDir, c.S3Endpoint)
+	}
+	if got := fmt.Sprint(c.Summary()...); !strings.Contains(got, "/source") || strings.Contains(got, "s3_endpoint") {
+		t.Errorf("summary = %s", got)
+	}
+	env := localEnv()
+	env["S3_REGION"] = "garage" // left over from .env.example
+	if _, err := load(env); err != nil {
+		t.Errorf("S3_REGION alone must not conflict: %v", err)
+	}
+}
+
+func TestLoadLocalSourceErrors(t *testing.T) {
+	for _, name := range []string{"S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY"} {
+		env := localEnv()
+		env[name] = "https://s3.example.com"
+		if _, err := load(env); err == nil || !strings.Contains(err.Error(), "LOCAL_VAULT_DIR: cannot be used together with "+name) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+	for _, dir := range []string{"/vault", "/vault/", "/vault/sub", "/"} {
+		env := localEnv()
+		env["LOCAL_VAULT_DIR"] = dir
+		if _, err := load(env); err == nil || !strings.Contains(err.Error(), "must not overlap VAULT_DIR") {
+			t.Errorf("%s: err = %v", dir, err)
+		}
+	}
+}
+
+// TestLoadS3StillRequired: without LOCAL_VAULT_DIR a lost S3 variable stays a startup error.
+func TestLoadS3StillRequired(t *testing.T) {
+	for _, name := range []string{"S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY"} {
+		env := validEnv()
+		delete(env, name)
+		if _, err := load(env); err == nil || !strings.Contains(err.Error(), name+": required") {
+			t.Errorf("%s: err = %v", name, err)
 		}
 	}
 }
