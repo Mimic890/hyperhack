@@ -4,3 +4,4 @@ vault/
 /hyperhack
 /dist/
 *:Zone.Identifier
+!demo/vault/

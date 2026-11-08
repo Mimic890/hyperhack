@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,9 @@ type Config struct {
 	S3Bucket    string
 	S3AccessKey string
 	S3SecretKey string
+
+	// LocalVaultDir, when set, replaces S3 as the content source.
+	LocalVaultDir string
 
 	PollInterval time.Duration
 
@@ -75,6 +79,9 @@ type Config struct {
 
 const minSecretLen = 32
 
+// placeholder marks the sample values in .env.example; they are public, so they must never run.
+const placeholder = "change-me"
+
 var indexNowKeyRe = regexp.MustCompile(`^[a-zA-Z0-9-]{8,128}$`)
 
 // privateRanges is the default for METRICS_ALLOW and REINDEX_ALLOW: loopback and private ranges.
@@ -91,11 +98,7 @@ func Load(getenv func(string) string) (*Config, error) {
 		DefaultLang: l.enum("DEFAULT_LANG", "en", "en", "ru"),
 		GitHubURL:   l.optionalURL("GITHUB_URL"),
 
-		S3Endpoint:  l.url("S3_ENDPOINT", true, "https"),
-		S3Region:    l.str("S3_REGION", "garage"),
-		S3Bucket:    l.required("S3_BUCKET"),
-		S3AccessKey: l.required("S3_ACCESS_KEY"),
-		S3SecretKey: l.required("S3_SECRET_KEY"),
+		LocalVaultDir: l.str("LOCAL_VAULT_DIR", ""),
 
 		PollInterval: l.duration("POLL_INTERVAL", "60s", 10*time.Second, 24*time.Hour),
 
@@ -134,8 +137,25 @@ func Load(getenv func(string) string) (*Config, error) {
 		MaxAssetBytes: int64(l.int("MAX_ASSET_BYTES", 50<<20, 1024, 1<<30)),
 		MaxObjects:    l.int("MAX_OBJECTS", 10000, 1, 1_000_000),
 	}
-	if c.S3Endpoint != nil && c.S3Endpoint.Path != "" {
-		l.fail("S3_ENDPOINT", "must not have a path")
+	if c.LocalVaultDir == "" {
+		c.S3Endpoint = l.url("S3_ENDPOINT", true, "https")
+		c.S3Region = l.str("S3_REGION", "garage")
+		c.S3Bucket = l.required("S3_BUCKET")
+		c.S3AccessKey = l.credential("S3_ACCESS_KEY")
+		c.S3SecretKey = l.credential("S3_SECRET_KEY")
+		if c.S3Endpoint != nil && c.S3Endpoint.Path != "" {
+			l.fail("S3_ENDPOINT", "must not have a path")
+		}
+	} else {
+		// S3_REGION has a default and is harmless on its own, so it does not count as S3 being set.
+		for _, name := range []string{"S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY"} {
+			if l.str(name, "") != "" {
+				l.fail("LOCAL_VAULT_DIR", "cannot be used together with %s; pick one content source", name)
+			}
+		}
+		if overlaps(c.LocalVaultDir, c.VaultDir) {
+			l.fail("LOCAL_VAULT_DIR", "must not overlap VAULT_DIR: the sync deletes files from VAULT_DIR")
+		}
 	}
 	if err := errors.Join(l.errs...); err != nil {
 		return nil, err
@@ -145,10 +165,13 @@ func Load(getenv func(string) string) (*Config, error) {
 
 // Summary returns non-secret settings for the startup log.
 func (c *Config) Summary() []any {
-	return []any{
+	source := []any{"local_vault_dir", c.LocalVaultDir}
+	if c.S3Endpoint != nil {
+		source = []any{"s3_endpoint", c.S3Endpoint.String()}
+	}
+	return append(source,
 		"site_url", c.SiteURL.String(),
 		"default_lang", c.DefaultLang,
-		"s3_endpoint", c.S3Endpoint.String(),
 		"poll_interval", c.PollInterval.String(),
 		"log_level", c.LogLevel.String(),
 		"log_format", c.LogFormat,
@@ -156,7 +179,22 @@ func (c *Config) Summary() []any {
 		"vault_dir", c.VaultDir,
 		"indexnow", c.IndexNowKey != "",
 		"trusted_proxies", len(c.TrustedProxies),
+	)
+}
+
+// overlaps reports whether two folders are the same or one holds the other.
+func overlaps(a, b string) bool {
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA != nil || errB != nil {
+		return true // cannot prove they are apart
 	}
+	return inside(absA, absB) || inside(absB, absA)
+}
+
+func inside(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	return err == nil && filepath.IsLocal(rel)
 }
 
 type loader struct {
@@ -188,7 +226,21 @@ func (l *loader) secret(name string) string {
 	if len(v) < minSecretLen {
 		l.fail(name, "required, at least %d bytes", minSecretLen)
 	}
+	l.rejectPlaceholder(name, v)
 	return v
+}
+
+// credential reads a required value that must not be left at its .env.example placeholder.
+func (l *loader) credential(name string) string {
+	v := l.required(name)
+	l.rejectPlaceholder(name, v)
+	return v
+}
+
+func (l *loader) rejectPlaceholder(name, v string) {
+	if strings.Contains(strings.ToLower(v), placeholder) {
+		l.fail(name, "still the placeholder from .env.example; generate a value with: openssl rand -base64 48")
+	}
 }
 
 func (l *loader) enum(name, def string, allowed ...string) string {

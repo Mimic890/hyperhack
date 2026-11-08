@@ -1,6 +1,7 @@
 # Caddyfile for hyperhack. Copy it, replace example.com and /srv/hyperhack.
 #
-# Needs Caddy built with two plugins (README → Caddy):
+# Recommended for a public site. Needs Caddy built with two plugins (README → Caddy);
+# for the stock image use Caddyfile.minimal.example.
 #   xcaddy build v2.11.7 \
 #     --with github.com/mholt/caddy-ratelimit@v0.1.0 \
 #     --with github.com/hslatman/caddy-crowdsec-bouncer/http@v0.14.1

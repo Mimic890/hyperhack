@@ -8,8 +8,8 @@ A lightweight replacement for Ghost. Ghost is too heavy for one author.
 ## Goal
 
 A light, fast blog for one author.
-Posts are Markdown files in S3.
-The author writes in Obsidian and publishes by syncing the vault to the bucket.
+Posts are Markdown files in S3 or in a local folder.
+The author writes in Obsidian and publishes by syncing the vault to the bucket or the folder.
 
 ## Scope
 
@@ -31,7 +31,7 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 
 - Multiple users, registration, roles.
 - Web editor or admin panel for posts.
-- WebDAV. S3 is the only storage backend.
+- WebDAV. There are two content sources: an S3 bucket (default) and a local folder (explicit mode, `LOCAL_VAULT_DIR`).
 - Site-wide traffic analytics. Reverse proxy logs and Grafana cover it.
 - Migration of old Ghost posts.
 
@@ -45,7 +45,7 @@ The author writes in Obsidian and publishes by syncing the vault to the bucket.
 | Themes | Light and dark, toggle in the top bar. System theme by default until the visitor picks one. The choice is stored in a cookie and rendered on the server (no inline JS). The toggle is a form that posts to `/prefs`, so it works without JS. |
 | Design | See Design. Fonts: Onest (text) and JetBrains Mono (code and heading markers), OFL, self-hosted, Latin + Cyrillic subsets. |
 | Languages | Code, docs, UI: English. UI also in Russian. Default: `DEFAULT_LANG` (`en` / `ru`) in `.env`. Visitor dropdown in the top bar; the choice is stored in a cookie (the server must know it to render the page). Post text is not translated. |
-| Storage | Garage (S3 API), path-style addressing. Client: `github.com/minio/minio-go/v7`. |
+| Storage | Garage (S3 API), path-style addressing. Client: `github.com/minio/minio-go/v7`. Or a local folder the author syncs by other means, see Content sync. |
 | Post format | One `.md` = one post. Metadata: Obsidian properties (YAML frontmatter). |
 | Metrics | Prometheus text format on `/metrics`, scraped by VictoriaMetrics, Grafana dashboard. |
 | Logs | `log/slog`, levels DEBUG / INFO / WARN / ERROR. |
@@ -214,7 +214,8 @@ Proposed variables (final names set during implementation):
 | `DEFAULT_LANG` | UI language and default post language: `en` or `ru`. Default `en`. |
 | `GITHUB_URL` | GitHub link in the top bar when `home.md` sets no social links. |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Bucket access. `S3_ENDPOINT` must be `https://`. `S3_REGION` default: `garage`. |
-| `POLL_INTERVAL` | Bucket polling interval. Default: `60s`, range 10s–24h. |
+| `LOCAL_VAULT_DIR` | Optional. Folder used as the content source instead of S3. Set together with `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY` or `S3_SECRET_KEY` → config error. Must not overlap `VAULT_DIR`. |
+| `POLL_INTERVAL` | Source polling interval. Default: `60s`, range 10s–24h. |
 | `REINDEX_TOKEN` | Token for `POST /reindex`. |
 | `ALTCHA_HMAC_KEY` | ALTCHA secret. |
 | `READING_WPM` | Words per minute for estimated reading time. Default: `200`. |
@@ -243,6 +244,8 @@ Proposed variables (final names set during implementation):
 - The service port is not published to the internet: localhost, Docker network or mesh IP only. The reverse proxy (Caddy) handles TLS.
 - The agent writes `.gitignore` (at least: `.env`, `data/`, build output).
 - Domain: from `SITE_URL`.
+- `demo/compose.yml` is a local demo: built from the checkout, port on `127.0.0.1:8080` only, `LOCAL_VAULT_DIR` on `demo/vault` mounted read-only, SQLite and mirror on tmpfs owned by the container user, public demo secrets. Never for production.
+- `Caddyfile.minimal.example` runs on the stock `caddy` image: same routes, blocks and `/assets/*` rules as `Caddyfile.example`, without the plugins.
 - The repo has `Caddyfile.example` for this service with domain `example.com`: reverse proxy to the service, `/metrics` and `/reindex` blocked, `/assets/*` served from `vault/assets/` with the headers and allowlist from Security → Perimeter. README shows the same block.
 
 ## Bucket layout
@@ -262,7 +265,7 @@ Proposed variables (final names set during implementation):
 
 ### Local vault mirror and assets
 
-- During sync the service mirrors the bucket to `VAULT_DIR` on disk: downloads new and changed objects, deletes removed ones. The bucket stays the source of truth.
+- During sync the service mirrors the bucket to `VAULT_DIR` on disk: downloads new and changed objects, deletes removed ones. The bucket stays the source of truth. With `LOCAL_VAULT_DIR` the folder takes the place of the bucket and is copied the same way.
 - Mirror state (object key → `ETag`) is in `VAULT_DIR/.hyperhack.json`, mode `0600`, so a restart does not download everything again. Deleting `vault/` forces a full resync.
 - Compose layout (bind mounts only, no Docker volumes):
   ```
@@ -272,7 +275,7 @@ Proposed variables (final names set during implementation):
   ├── data/    # DATA_DIR: SQLite
   └── vault/   # VAULT_DIR: bucket mirror
   ```
-- Caddy (on the host) serves `/assets/*` straight from `vault/assets/` with `file_server`. The service does not serve assets.
+- Caddy (on the host) serves `/assets/*` straight from `vault/assets/` with `file_server`. With S3 the service does not serve assets. With `LOCAL_VAULT_DIR` it also serves `/assets/*` itself from the mirror, with the rules from Security → Perimeter, so no reverse proxy is needed on a local machine; a Caddy in front still takes these paths first.
 - Caddy serves only `/assets/*`. `.md` files and other vault paths are not exposed.
 - The Caddy user needs read access to `vault/assets/`.
 - Pages and images keep working when S3 is down; only new changes wait for the next successful sync.
@@ -363,6 +366,13 @@ The service finds changes in two ways:
    Called over the private network (blocked on the public domain), so a post appears at once.
 
 Polling is the fallback. The endpoint is the fast path.
+
+With `LOCAL_VAULT_DIR` the same two paths run over a folder instead of `ListObjectsV2`:
+
+- `ETag` is file size + modification time in nanoseconds. No file watcher: inotify does not report changes made on the host side of a Windows or network mount, and polling needs no new dependency.
+- Folders and files starting with `.` or `_` are not walked, so `.git` cannot use up `MAX_OBJECTS`. Symlinks are not followed.
+- The folder is only read and is mounted read-only (`:ro`). `VAULT_DIR` stays a separate copy because the sync deletes from it.
+- A missing folder, or one with nothing to list, is a sync error: the mirror stays as it is, so an unmounted folder cannot wipe the site.
 
 - S3 errors: up to 3 attempts per poll (retry after 5 s, then 30 s), WARN per failed attempt, ERROR after the last.
 - A failed download keeps the old copy; the next poll retries it.
@@ -532,7 +542,7 @@ Rules:
 | `DEBUG` | Sync details (each object, `ETag` compare), post render, SQLite queries, each HTTP request. |
 | `INFO` | Startup and config summary (no secrets), poll result (added / updated / removed), `/reindex` call, shutdown. |
 | `WARN` | Post skipped (no `title` or `date`, invalid YAML), rate limit hit, ALTCHA failed, temporary S3 error with retry. |
-| `ERROR` | `slug` conflict, S3 unavailable after retries, SQLite write error, recovered panic in a handler. |
+| `ERROR` | `slug` conflict, S3 or local vault unavailable after retries, SQLite write error, recovered panic in a handler. |
 
 Never log: `/reindex` token, S3 keys, ALTCHA secret, raw IP, visitor hash.
 
@@ -556,7 +566,7 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 
 ### Perimeter (Caddy, outside the service)
 
-- `caddy-ratelimit` + CrowdSec bouncer. Rate limit: 1200 requests per minute per client IP; `/static/*` and `/assets/*` are not counted.
+- Recommended for a public site: `caddy-ratelimit` + CrowdSec bouncer. Without them (`Caddyfile.minimal.example`) pages have no per-client limit and nobody is blocked by CrowdSec: accepted by the operator who chooses it. Rate limit: 1200 requests per minute per client IP; `/static/*` and `/assets/*` are not counted.
 - Blocked on the public domain: `/metrics`, `/reindex`.
 - `/assets/*`:
   - Extension allowlist: `png jpg jpeg webp avif gif svg mp4 webm`. Others → `404`.
@@ -581,6 +591,7 @@ Trust boundaries: internet → Caddy → service; bucket → service (semi-trust
 | `/prefs` | POST | public | form body ≤ 4 KB, enum check for `theme` / `lang`, redirect only to a local path |
 | `/favicon.ico` | GET | public | built-in SVG mark, or `302` to the favicon from `home.md` / `/assets/logo.svg`; never `404` |
 | `/static/*` | GET | public | embedded CSS, JS and fonts, and `/static/theme/<hash>.css` built from validated colors (unknown hash → `404`); no directory listing |
+| `/assets/*` | GET | public | only with `LOCAL_VAULT_DIR`; extension allowlist, sandbox CSP, `os.Root` on the mirror; other paths → `404` |
 | `/<INDEXNOW_KEY>.txt` | GET | public | only if `INDEXNOW_KEY` is set; body is the key |
 
 Other methods → `405`. Unknown paths → `404`.
@@ -611,6 +622,7 @@ Other methods → `405`. Unknown paths → `404`.
 ### Security headers (set by the service)
 
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests`. Add `blob:` to `worker-src` only if the ALTCHA build needs it.
+- With `LOCAL_VAULT_DIR` and an `http` `SITE_URL`, the CSP drops `upgrade-insecure-requests`: Safari upgrades loopback requests too and loses all CSS, JS and images.
 - No inline scripts or styles. Theme and language come from cookies and are rendered on the server, so no inline script is needed against a theme flash. `<script type="application/json">` is a data block that does not run, so the CSP does not change.
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()`.
 - All JS, CSS, fonts and the ALTCHA solver are self-hosted. No CDN, no third-party requests.
@@ -654,6 +666,7 @@ Other methods → `405`. Unknown paths → `404`.
 - Size limits: `MAX_POST_BYTES` (default 1 MiB), `MAX_ASSET_BYTES` (50 MiB), `MAX_OBJECTS` (10 000). Over limit → skip + WARN. `MAX_OBJECTS` counts every key in the bucket, ignored ones too.
 - Mirror writes go through `os.Root` (Go ≥ 1.24): no escape via `..` or symlinks. Keys with an absolute path, `\`, NUL or control characters are rejected.
 - Assets: same extension allowlist as Caddy.
+- `.env.example` placeholders: a secret or S3 key containing `change-me` is a config error, because the samples are public.
 - Atomic writes (temp file + rename), so Caddy never serves a partial file.
 - Modes: dirs `0755`, files `0644` (Caddy needs read). SQLite file `0600`.
 - Frontmatter size is checked before YAML parsing. `cover` must resolve inside `assets/`.
@@ -796,3 +809,4 @@ Other methods → `405`. Unknown paths → `404`.
 - 2026-11-07 — Top bar logo box grows from 40×29px to 47×34px (about 17%), same aspect ratio: the mark looked too small next to the 21px site name.
 - 2026-11-07 — Logos in `home.md`: `logo` sets the top bar logo for the light and the dark theme and a separate favicon, as paths inside `assets/`. `assets/logo.svg` stays as the fallback, so existing sites do not change. The icon link loses `type="image/svg+xml"`, since the favicon can now be a PNG.
 - 2026-11-07 — Social links in `home.md`: `github`, `x` and `telegram` add Telegram and X buttons with their marks and move the GitHub link out of `.env`; a missing field hides its button. `GITHUB_URL` stays as the fallback when `home.md` sets none of the three. Icon buttons narrow to 36px at ≤ 30rem so the bar keeps one row.
+- 2026-11-08 — Local folder as a second content source, in explicit mode only: `LOCAL_VAULT_DIR`, never inferred from an empty `S3_ENDPOINT`; set with S3 values it is a config error. It is another `Bucket` copied into the mirror, polled by the same ticker with `ETag` = size + mtime. An empty or missing folder is an error and keeps the mirror. In this mode the service serves `/assets/*`, and over plain `http` drops `upgrade-insecure-requests`. S3 behavior is unchanged. One-command demo in `demo/`. Caddy plugins are recommended, not required, with `Caddyfile.minimal.example` for the stock image. Secrets and S3 keys containing `change-me` are rejected at startup.

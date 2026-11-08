@@ -1,0 +1,42 @@
+# Minimal Caddyfile for hyperhack on the stock caddy image, without plugins.
+# Copy it, replace example.com and /srv/hyperhack.
+#
+# It has no per-client limit on pages and no CrowdSec. The service still limits
+# /search and its write endpoints. For a public site prefer Caddyfile.example.
+#
+# Keep the @private block: without it /metrics and /reindex are reachable from
+# the internet, because the service sees Caddy's private address.
+example.com {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	encode zstd gzip
+
+	@private path /metrics /metrics/* /reindex /reindex/*
+	handle @private {
+		respond 404
+	}
+
+	# Assets straight from the mirror (vault/assets/), allowed extensions only.
+	handle /assets/* {
+		@allowed path *.png *.jpg *.jpeg *.webp *.avif *.gif *.svg *.mp4 *.webm
+		handle @allowed {
+			root * /srv/hyperhack/vault
+			header {
+				X-Content-Type-Options nosniff
+				Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+			}
+			file_server
+		}
+		respond 404
+	}
+
+	handle {
+		request_body /api/* {
+			max_size 16KB
+		}
+		reverse_proxy 127.0.0.1:8080
+	}
+}

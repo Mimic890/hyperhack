@@ -31,6 +31,7 @@ type Options struct {
 	MaxObjects    int
 	SiteURL       *url.URL
 	IndexNowKey   string // empty: no IndexNow pings
+	Local         bool   // the source is LOCAL_VAULT_DIR, not S3 (log wording only)
 }
 
 // Syncer runs one sync at a time; Sync calls wait for the running one.
@@ -136,7 +137,11 @@ func (s *Syncer) syncRetry(ctx context.Context) error {
 			return err
 		}
 		if i == len(s.retry) {
-			s.log.Error("S3 unavailable after retries", "attempts", i+1, "err", err)
+			msg := "S3 unavailable after retries"
+			if s.opts.Local {
+				msg = "local vault unavailable after retries"
+			}
+			s.log.Error(msg, "attempts", i+1, "err", err)
 			return err
 		}
 		s.log.Warn("sync failed, will retry", "in", s.retry[i].String(), "err", err)

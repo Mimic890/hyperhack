@@ -54,6 +54,9 @@ func New(log *slog.Logger, cfg *config.Config, d Deps) http.Handler {
 	mux.HandleFunc("GET /metrics", p.metricsPage)
 	mux.HandleFunc("GET /static/fonts/{file}", p.font)
 	mux.HandleFunc("GET /static/theme/{file}", p.theme)
+	if cfg.LocalVaultDir != "" {
+		mux.HandleFunc("GET /assets/{path...}", p.asset)
+	}
 	mux.HandleFunc("GET /", p.notFound)
 	mux.Handle("POST /reindex", reindex(p.log, cfg.ReindexToken, cfg.ReindexAllow, cfg.TrustedProxies, p.limit(p.lim.reindex, "reindex"), d.Sync))
 	// The "GET /" catch-all would answer GET on POST-only paths with 404; SPEC wants 405.
@@ -72,7 +75,15 @@ func New(log *slog.Logger, cfg *config.Config, d Deps) http.Handler {
 		}
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	return middleware(p.log, p.metrics, mux)
+	var root http.Handler = mux
+	if cfg.LocalVaultDir != "" && cfg.SiteURL.Scheme == "http" {
+		// Safari upgrades even loopback requests, so over plain http it loses all CSS, JS and images.
+		root = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Security-Policy", cspBase)
+			mux.ServeHTTP(w, r)
+		})
+	}
+	return middleware(p.log, p.metrics, root)
 }
 
 // middleware sets security headers, recovers panics, counts and logs each request on DEBUG.
@@ -99,8 +110,10 @@ func middleware(log *slog.Logger, m *registry, next http.Handler) http.Handler {
 	})
 }
 
+const cspBase = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
 func securityHeaders(h http.Header) {
-	h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests")
+	h.Set("Content-Security-Policy", cspBase+"; upgrade-insecure-requests")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	h.Set("Cross-Origin-Opener-Policy", "same-origin")
