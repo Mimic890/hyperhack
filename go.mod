@@ -6,7 +6,7 @@ toolchain go1.27.3
 
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0
-	github.com/altcha-org/altcha-lib-go/v2 v2.4.1
+	github.com/altcha-org/altcha-lib-go/v2 v2.5.0
 	github.com/blevesearch/bleve/v2 v2.6.1
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/minio/minio-go/v7 v7.4.1
